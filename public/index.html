@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>הפקת חשבונית מס — Priority</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a2233; --muted: #6b7280;
+    --border: #dde1e7; --accent: #b8860b; --accent-dark: #8f6a08;
+    --ok: #157347; --err: #b42318; --warn: #b45309;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 15px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; }
+  #env { font-size: 13px; color: var(--muted); }
+  #env .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #9ca3af; margin-inline-start: 6px; vertical-align: middle; }
+  #env.ok .dot { background: var(--ok); }
+  #env.err .dot { background: var(--err); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, button {
+    font: inherit; border-radius: 7px; border: 1px solid var(--border);
+    padding: 8px 10px; width: 100%; background: #fff; color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  input[type=number] { direction: ltr; text-align: right; }
+
+  .cust { position: relative; }
+  .cust-list {
+    position: absolute; top: 100%; right: 0; left: 0; z-index: 10;
+    background: #fff; border: 1px solid var(--border); border-radius: 7px;
+    margin-top: 3px; max-height: 240px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,.1);
+  }
+  .cust-list div { padding: 8px 12px; cursor: pointer; }
+  .cust-list div:hover, .cust-list div.active { background: #faf3e0; }
+  .cust-list .num { color: var(--muted); font-size: 13px; margin-inline-start: 8px; }
+  #custChosen { font-size: 13px; color: var(--ok); min-height: 18px; margin-top: 4px; }
+
+  /* פאנל "נתוני חברה" של הלקוח הנבחר (נדרש למספר הקצאה) */
+  #custInfo { display: none; margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; background: #fafbfc; }
+  #custInfo.show { display: block; }
+  #custInfo h4 { margin: 0 0 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  #custInfo .rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; }
+  #custInfo .k { color: var(--muted); }
+  #custInfo .missing { color: var(--err); font-weight: 600; }
+  #custInfo .alloc-warn { margin-top: 8px; padding: 6px 10px; border-radius: 6px; background: #fef4e6; color: var(--warn); border: 1px solid #f3d9a4; }
+  #custInfo .alloc-ok { margin-top: 8px; color: var(--ok); }
+  #custEdit { display: none; margin-top: 10px; display: none; }
+  #custEdit.show { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #custEdit label { font-size: 12px; }
+  #custEdit input, #custEdit select { padding: 6px 8px; font-size: 13px; }
+  #custEdit .actions { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+  #custEdit .actions button { width: auto; padding: 6px 14px; cursor: pointer; }
+  .mini-btn { width: auto; padding: 3px 10px; font-size: 12px; cursor: pointer; background: none; border: 1px solid var(--accent); color: var(--accent-dark); border-radius: 6px; }
+
+  /* השלמה אוטומטית של מק"ט בשורות */
+  .part-cell { position: relative; }
+  .part-list {
+    position: absolute; top: 100%; right: 0; min-width: 320px; z-index: 20;
+    background: #fff; border: 1px solid var(--border); border-radius: 7px;
+    margin-top: 3px; max-height: 260px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+  }
+  .part-list div { padding: 7px 12px; cursor: pointer; font-size: 13.5px; display: flex; justify-content: space-between; gap: 10px; }
+  .part-list div:hover, .part-list div.active { background: #faf3e0; }
+  .part-list .code { color: var(--accent-dark); font-weight: 600; direction: ltr; }
+  .part-list .sub { color: var(--muted); font-size: 12px; }
+  .l-desc { font-size: 12.5px; color: var(--muted); margin-top: 3px; min-height: 15px; }
+  .l-desc b { color: var(--text); font-weight: 500; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th { text-align: right; font-size: 12.5px; color: var(--muted); font-weight: 600; padding: 4px 6px; }
+  td { padding: 4px 6px; }
+  td input { padding: 7px 9px; }
+  .del { width: 34px; border: none; background: none; color: var(--muted); cursor: pointer; font-size: 17px; }
+  .del:hover { color: var(--err); }
+  .addline { width: auto; background: none; border: 1px dashed var(--border); color: var(--muted); cursor: pointer; margin-top: 8px; padding: 6px 14px; }
+  .addline:hover { border-color: var(--accent); color: var(--accent-dark); }
+
+  .totals { display: flex; gap: 26px; justify-content: flex-end; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px; }
+  .totals b { font-size: 17px; }
+  .totals .lbl { color: var(--muted); font-size: 12.5px; display: block; }
+
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
+  #submit {
+    width: auto; background: var(--accent); border-color: var(--accent);
+    color: #fff; font-weight: 600; padding: 10px 28px; cursor: pointer;
+  }
+  #submit:hover { background: var(--accent-dark); }
+  #submit:disabled { opacity: .55; cursor: wait; }
+
+  .msg { border-radius: 8px; padding: 12px 14px; margin-top: 14px; font-size: 14px; display: none; white-space: pre-wrap; }
+  .msg.show { display: block; }
+  .msg.ok { background: #e7f6ee; color: var(--ok); border: 1px solid #b5e0c8; }
+  .msg.err { background: #fdecea; color: var(--err); border: 1px solid #f5c6c0; }
+  .msg.warn { background: #fef4e6; color: var(--warn); border: 1px solid #f3d9a4; }
+  .msg .big { font-size: 20px; font-weight: 700; }
+
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  #recent table td, #recent table th { border-bottom: 1px solid var(--border); padding: 7px 6px; font-size: 13.5px; }
+  #recent .draft { color: var(--warn); }
+  #recent .final { color: var(--ok); }
+  .refresh { width: auto; padding: 4px 12px; font-size: 13px; cursor: pointer; background: none; color: var(--muted); }
+  .close-btn {
+    width: auto; padding: 3px 12px; font-size: 12.5px; cursor: pointer;
+    background: none; border: 1px solid var(--accent); color: var(--accent-dark); border-radius: 6px;
+  }
+  .close-btn:hover { background: var(--accent); color: #fff; }
+  .close-btn:disabled { opacity: .5; cursor: wait; }
+  .num-ltr { direction: ltr; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>הפקת חשבונית מס</h1>
+    <span id="env"><span id="envText">בודק חיבור…</span><span class="dot"></span></span>
+  </header>
+
+  <form class="card" id="form" autocomplete="off">
+    <div class="grid">
+      <div class="cust">
+        <label for="custSearch">לקוח (שם או מספר)</label>
+        <input id="custSearch" placeholder="שם או מספר לקוח (לפחות 2 תווים)…" required>
+        <div class="cust-list" id="custList" hidden></div>
+        <div id="custChosen"></div>
+        <input type="hidden" id="custname">
+        <div id="custInfo">
+          <h4><span>נתוני חברה (לחשבוניות ישראל / מספר הקצאה)</span><button type="button" class="mini-btn" id="custEditBtn">עריכה</button></h4>
+          <div class="rows" id="custRows"></div>
+          <div id="custAlloc"></div>
+          <div id="custEdit">
+            <div><label for="e_WTAXNUM">מס' חברה / ת.ז</label><input id="e_WTAXNUM" inputmode="numeric" maxlength="9" placeholder="9 ספרות"></div>
+            <div><label for="e_WTAXNUMEXPL">הסבר על מספר התיק</label>
+              <select id="e_WTAXNUMEXPL">
+                <option value="">— לא מוגדר —</option>
+                <option value="1">1 – מס' תיק של עצמאי או תעודת זהות</option>
+                <option value="2">2 – מס' תיק של חברה</option>
+                <option value="3">3 – מס' עוסק מורשה</option>
+                <option value="4">4 – עמותה</option>
+                <option value="5">5 – חברה בינ"ל</option>
+                <option value="9">9 – תושב חוץ</option>
+              </select></div>
+            <div><label for="e_VATNUM">מספר תיק במע"מ</label><input id="e_VATNUM" inputmode="numeric" maxlength="9" placeholder="בד"כ זהה למס' החברה"></div>
+            <div><label for="e_BUSINESSTYPE">תחום עיסוק</label><input id="e_BUSINESSTYPE"></div>
+            <div class="actions">
+              <button type="button" id="custSaveBtn" style="background:var(--accent);color:#fff;border-color:var(--accent)">שמירה בפריוריטי</button>
+              <button type="button" id="custCancelBtn">ביטול</button>
+              <span id="custSaveMsg" style="font-size:12.5px"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label for="date">תאריך חשבונית</label>
+        <input type="date" id="date" required>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label for="details">פרטים / מזהה הזמנה (מומלץ — משמש למניעת כפילויות)</label>
+      <input id="details" placeholder='למשל: הזמנה 1234'>
+    </div>
+
+    <table id="lines">
+      <thead><tr><th style="width:28%">מק"ט (קראט)</th><th style="width:24%">כמות בגרם</th><th style="width:24%">מחיר לגרם (לפני מע"מ)</th><th style="width:18%">סה"כ שורה</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" class="addline" id="addLine">+ הוספת שורה</button>
+
+    <div class="totals">
+      <div><span class="lbl">לפני מע"מ</span><b id="tBefore">0.00 ₪</b></div>
+      <div><span class="lbl">מע"מ 18%</span><b id="tVat">0.00 ₪</b></div>
+      <div><span class="lbl">סה"כ לתשלום</span><b id="tTotal">0.00 ₪</b></div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" id="submit">הפקת חשבונית</button>
+      <span style="font-size:12.5px;color:var(--muted)">החשבונית תיווצר כטיוטה (מספר T). הסכום הקובע הוא מה ש-Priority מחזיר.</span>
+    </div>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <div class="card" id="recent">
+    <h2>חשבוניות אחרונות (משתמש API) <button type="button" class="refresh" id="refreshBtn">רענון</button></h2>
+    <div id="recentBody" style="color:var(--muted);font-size:13.5px">טוען…</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const VAT_RATE = 0.18;
+const fmt = n => (Number(n) || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₪';
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'שגיאה לא ידועה');
+  return data;
+}
+
+// ---------- תאריך ברירת מחדל: היום בישראל ----------
+$('date').value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
+
+// ---------- בדיקת חיבור ----------
+(async () => {
+  const env = $('env'), txt = $('envText');
+  try {
+    const h = await api('/api/health');
+    env.classList.add('ok');
+    txt.textContent = 'מחובר · חברה: ' + h.company;
+  } catch (e) {
+    env.classList.add('err');
+    txt.textContent = 'אין חיבור ל-Priority — ' + e.message;
+  }
+})();
+
+// ---------- לקוחות: דרופ-דאון עם סינון מקומי ----------
+let custTimer, custActive = -1, custItems = [], allCust = null;
+const custSearch = $('custSearch'), custList = $('custList');
+
+// טעינת כל הלקוחות פעם אחת (השרת שומר קאש ל-10 דקות)
+(async () => {
+  try {
+    const data = await api('/api/customers/all');
+    allCust = data.value || [];
+    custSearch.placeholder = `בחרו לקוח (${allCust.length.toLocaleString('he-IL')} לקוחות) או הקלידו לסינון…`;
+  } catch { allCust = null; /* נופלים לחיפוש מול השרת */ }
+})();
+
+function renderCustList(items, emptyMsg) {
+  custItems = items;
+  custActive = -1;
+  custList.innerHTML = items.length
+    ? items.map((c, i) => `<div data-i="${i}">${c.CUSTDES}<span class="num">${c.CUSTNAME}</span></div>`).join('')
+    : `<div style="color:var(--muted);cursor:default">${emptyMsg}</div>`;
+  custList.hidden = false;
+  custList.scrollTop = 0;
+}
+
+function localFilter(q) {
+  if (!q) return allCust;
+  return allCust.filter(c => (c.CUSTDES || '').includes(q) || String(c.CUSTNAME).startsWith(q));
+}
+
+// לחיצה על השדה פותחת את הרשימה המלאה
+custSearch.addEventListener('focus', () => {
+  if (allCust) renderCustList(localFilter(custSearch.value.trim()), 'לא נמצאו לקוחות');
+});
+
+custSearch.addEventListener('input', () => {
+  $('custname').value = '';
+  $('custChosen').textContent = '';
+  renderCustDetails(null);
+  const q = custSearch.value.trim();
+
+  // סינון מקומי — מיידי
+  if (allCust) { renderCustList(localFilter(q), 'לא נמצאו לקוחות'); return; }
+
+  // fallback: חיפוש מול השרת אם הרשימה המלאה לא נטענה
+  clearTimeout(custTimer);
+  if (q.length < 2) { custList.hidden = true; return; }
+  custTimer = setTimeout(async () => {
+    try {
+      const data = await api('/api/customers?q=' + encodeURIComponent(q));
+      if (data.unavailable) {
+        custList.innerHTML = '<div style="color:var(--warn);cursor:default">חיפוש לקוחות לא זמין למשתמש ה-API — הזינו מספר לקוח (ספרות בלבד) והמשיכו</div>';
+        custList.hidden = false; custItems = [];
+      } else renderCustList(data.value || [], 'לא נמצאו לקוחות');
+    } catch (e) {
+      custList.innerHTML = `<div style="color:var(--err);cursor:default">${e.message}</div>`;
+      custList.hidden = false;
+    }
+  }, 300);
+});
+
+function pickCust(i) {
+  const c = custItems[i];
+  if (!c) return;
+  $('custname').value = c.CUSTNAME;
+  custSearch.value = c.CUSTDES;
+  $('custChosen').textContent = `✓ נבחר: ${c.CUSTDES} (${c.CUSTNAME})`;
+  custList.hidden = true;
+  loadCustDetails(c.CUSTNAME);
+}
+
+// ---------- נתוני חברה של הלקוח (נדרש למספר הקצאה) ----------
+const EXPL_NAMES = { '1': 'עצמאי / ת.ז', '2': 'חברה', '3': 'עוסק מורשה', '4': 'עמותה', '5': 'חברה בינ"ל', '9': 'תושב חוץ' };
+let custDetails = null;
+
+function custVal(v, missingText = 'חסר') {
+  return v ? String(v) : `<span class="missing">${missingText}</span>`;
+}
+
+function renderCustDetails(d) {
+  custDetails = d;
+  const info = $('custInfo');
+  if (!d) { info.classList.remove('show'); return; }
+  const expl = d.WTAXNUMEXPL ? `${d.WTAXNUMEXPL} – ${EXPL_NAMES[d.WTAXNUMEXPL] || ''}` : '';
+  $('custRows').innerHTML =
+    `<span class="k">מס' חברה / ת.ז</span><span class="num-ltr">${custVal(d.WTAXNUM)}</span>` +
+    `<span class="k">הסבר המס'</span><span>${custVal(expl)}</span>` +
+    `<span class="k">תיק מע"מ</span><span class="num-ltr">${custVal(d.VATNUM)}</span>` +
+    `<span class="k">סוג לקוח</span><span>${d.CTYPECODE ? `${d.CTYPECODE} – ${d.CTYPENAME || ''}` : custVal('')}</span>` +
+    `<span class="k">תחום עיסוק</span><span>${custVal(d.BUSINESSTYPE, '—')}</span>` +
+    (d.PCUSTNAME ? `<span class="k">חברת אם</span><span>${d.PCUSTNAME} – ${d.PCUSTDES || ''}</span>` : '') +
+    (d.EDEA_CONSIGWARHSNAME ? `<span class="k">מחסן קונסיגנציה</span><span>${d.EDEA_CONSIGWARHSNAME} – ${d.EDEA_CONSIGWARHSDES || ''}</span>` : '');
+  const missing = [];
+  if (!d.WTAXNUM) missing.push("מס' חברה");
+  if (!d.WTAXNUMEXPL) missing.push("הסבר המס'");
+  if (!d.VATNUM) missing.push('תיק מע"מ');
+  $('custAlloc').innerHTML = missing.length
+    ? `<div class="alloc-warn">⚠️ חסר: ${missing.join(', ')} — נדרש לקבלת מספר הקצאה (חשבוניות ישראל). אפשר להשלים כאן בלחיצה על "עריכה".</div>`
+    : `<div class="alloc-ok">✓ נתוני החברה מלאים — מתאים לחשבוניות ישראל</div>`;
+  $('custEdit').classList.remove('show');
+  info.classList.add('show');
+}
+
+async function loadCustDetails(custname) {
+  try {
+    renderCustDetails(await api('/api/customers/details?custname=' + encodeURIComponent(custname)));
+  } catch (e) {
+    custDetails = null;
+    $('custRows').innerHTML = `<span class="missing" style="grid-column:1/-1">לא ניתן לטעון נתוני חברה: ${e.message}</span>`;
+    $('custAlloc').innerHTML = '';
+    $('custEdit').classList.remove('show');
+    $('custInfo').classList.add('show');
+  }
+}
+
+$('custEditBtn').addEventListener('click', () => {
+  if (!custDetails) return;
+  const ed = $('custEdit');
+  ed.classList.toggle('show');
+  if (!ed.classList.contains('show')) return;
+  $('e_WTAXNUM').value = custDetails.WTAXNUM || '';
+  $('e_WTAXNUMEXPL').value = custDetails.WTAXNUMEXPL || '';
+  $('e_VATNUM').value = custDetails.VATNUM || custDetails.WTAXNUM || '';
+  $('e_BUSINESSTYPE').value = custDetails.BUSINESSTYPE || '';
+  $('custSaveMsg').textContent = '';
+  $('e_WTAXNUM').focus();
+});
+$('custCancelBtn').addEventListener('click', () => $('custEdit').classList.remove('show'));
+$('custSaveBtn').addEventListener('click', async () => {
+  if (!custDetails) return;
+  const fields = {
+    WTAXNUM: $('e_WTAXNUM').value.trim(),
+    WTAXNUMEXPL: $('e_WTAXNUMEXPL').value,
+    VATNUM: $('e_VATNUM').value.trim(),
+    BUSINESSTYPE: $('e_BUSINESSTYPE').value.trim(),
+  };
+  // שולחים רק מה שהשתנה
+  const changed = {};
+  for (const [k, v] of Object.entries(fields)) if ((custDetails[k] || '') !== v) changed[k] = v;
+  const msgEl = $('custSaveMsg');
+  if (!Object.keys(changed).length) { msgEl.textContent = 'אין שינויים'; return; }
+  const btn = $('custSaveBtn');
+  btn.disabled = true; msgEl.style.color = 'var(--muted)'; msgEl.textContent = 'שומר בפריוריטי…';
+  try {
+    const d = await api('/api/customers/update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custname: custDetails.CUSTNAME, fields: changed }),
+    });
+    renderCustDetails(d);
+    showMsg('ok', `✔ נתוני הלקוח ${d.CUSTDES} (${d.CUSTNAME}) עודכנו בפריוריטי`);
+  } catch (e) {
+    msgEl.style.color = 'var(--err)'; msgEl.textContent = '✖ ' + e.message;
+  } finally { btn.disabled = false; }
+});
+custList.addEventListener('mousedown', e => {
+  const d = e.target.closest('[data-i]');
+  if (d) pickCust(Number(d.dataset.i));
+});
+custSearch.addEventListener('keydown', e => {
+  if (custList.hidden) return;
+  const items = custList.querySelectorAll('[data-i]');
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    custActive = e.key === 'ArrowDown' ? Math.min(custActive + 1, items.length - 1) : Math.max(custActive - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === custActive));
+    items[custActive]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && custActive >= 0) {
+    e.preventDefault(); pickCust(custActive);
+  } else if (e.key === 'Escape') custList.hidden = true;
+});
+document.addEventListener('click', e => { if (!e.target.closest('.cust')) custList.hidden = true; });
+
+// ---------- שורות ----------
+const tbody = $('lines').querySelector('tbody');
+
+function addLine(partname = '14', grams = '', price = '') {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="part-cell"><input class="l-part" value="${partname}" required autocomplete="off" placeholder="מק&quot;ט או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
+    <td><input class="l-grams" type="number" step="0.01" min="0.01" value="${grams}" required></td>
+    <td><input class="l-price" type="number" step="0.01" min="0.01" value="${price}" required></td>
+    <td class="l-total" style="color:var(--muted)">—</td>
+    <td><button type="button" class="del" title="מחיקת שורה">✕</button></td>`;
+  tbody.appendChild(tr);
+  tr.querySelector('.l-grams').focus();
+  // מק"ט שהגיע מוכן (ברירת מחדל 14) — משלימים את התיאור שלו מפריוריטי
+  if (partname) {
+    api('/api/parts?q=' + encodeURIComponent(partname)).then(data => {
+      const p = (data.value || []).find(x => x.PARTNAME === partname);
+      if (p && tr.isConnected) {
+        const unit = p.PUNITNAME || p.UNITNAME || '';
+        tr.querySelector('.l-desc').innerHTML = `<b>${p.PARTDES || ''}</b>${unit ? ' · יחידה: ' + unit : ''}`;
+      }
+    }).catch(() => {});
+  }
+}
+$('addLine').addEventListener('click', () => addLine());
+tbody.addEventListener('click', e => {
+  if (e.target.classList.contains('del')) {
+    if (tbody.rows.length > 1) e.target.closest('tr').remove();
+    recalc();
+  }
+});
+tbody.addEventListener('input', recalc);
+
+// ---------- השלמה אוטומטית של מק"ט (חיפוש ב-Priority תוך כדי הקלדה) ----------
+const partState = new WeakMap(); // input -> { timer, items, active }
+
+function partRow(input) { return input.closest('tr'); }
+
+function renderPartList(input, items, emptyMsg) {
+  const st = partState.get(input) || {};
+  st.items = items; st.active = -1; partState.set(input, st);
+  const list = partRow(input).querySelector('.part-list');
+  list.innerHTML = items.length
+    ? items.map((p, i) => `<div data-i="${i}"><span class="code">${p.PARTNAME}</span><span>${p.PARTDES || ''} <span class="sub">${p.PUNITNAME || p.UNITNAME || ''}${p.EDEA_FEIN ? ' · ' + p.EDEA_FEIN : ''}</span></span></div>`).join('')
+    : `<div style="color:var(--muted);cursor:default">${emptyMsg}</div>`;
+  list.hidden = false;
+}
+
+function hidePartList(input) {
+  const list = partRow(input)?.querySelector('.part-list');
+  if (list) list.hidden = true;
+}
+
+function pickPart(input, i) {
+  const st = partState.get(input);
+  const p = st?.items?.[i];
+  if (!p) return;
+  const tr = partRow(input);
+  input.value = p.PARTNAME;
+  const unit = p.PUNITNAME || p.UNITNAME || '';
+  tr.querySelector('.l-desc').innerHTML = `<b>${p.PARTDES || ''}</b>${unit ? ' · יחידה: ' + unit : ''}${p.FAMILYDES ? ' · ' + p.FAMILYDES : ''}`;
+  // מילוי מחיר אחרון מפריוריטי רק אם השדה ריק — המשתמש תמיד יכול לשנות
+  const price = tr.querySelector('.l-price');
+  if (!price.value && Number(p.LASTPRICE) > 0) price.value = Number(p.LASTPRICE);
+  hidePartList(input);
+  recalc();
+  tr.querySelector('.l-grams').focus();
+}
+
+tbody.addEventListener('input', e => {
+  const input = e.target;
+  if (!input.classList.contains('l-part')) return;
+  const st = partState.get(input) || {};
+  partState.set(input, st);
+  clearTimeout(st.timer);
+  partRow(input).querySelector('.l-desc').textContent = '';
+  const q = input.value.trim();
+  if (!q) { hidePartList(input); return; }
+  st.timer = setTimeout(async () => {
+    try {
+      const data = await api('/api/parts?q=' + encodeURIComponent(q));
+      if (input.value.trim() !== q) return; // המשתמש המשיך להקליד
+      renderPartList(input, data.value || [], 'לא נמצאו פריטים');
+    } catch (err) {
+      renderPartList(input, [], err.message);
+    }
+  }, 250);
+});
+
+tbody.addEventListener('mousedown', e => {
+  const d = e.target.closest('.part-list [data-i]');
+  if (!d) return;
+  e.preventDefault();
+  pickPart(d.closest('.part-cell').querySelector('.l-part'), Number(d.dataset.i));
+});
+
+tbody.addEventListener('keydown', e => {
+  const input = e.target;
+  if (!input.classList.contains('l-part')) return;
+  const list = partRow(input).querySelector('.part-list');
+  if (list.hidden) return;
+  const st = partState.get(input) || { active: -1, items: [] };
+  const items = list.querySelectorAll('[data-i]');
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    st.active = e.key === 'ArrowDown' ? Math.min(st.active + 1, items.length - 1) : Math.max(st.active - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === st.active));
+    items[st.active]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && st.active >= 0) {
+    e.preventDefault(); pickPart(input, st.active);
+  } else if (e.key === 'Escape') hidePartList(input);
+});
+
+tbody.addEventListener('focusout', e => {
+  if (e.target.classList.contains('l-part')) setTimeout(() => hidePartList(e.target), 150);
+});
+
+function readLines() {
+  return [...tbody.rows].map(tr => ({
+    partname: tr.querySelector('.l-part').value.trim(),
+    grams: Number(tr.querySelector('.l-grams').value),
+    price: Number(tr.querySelector('.l-price').value),
+  }));
+}
+
+function recalc() {
+  let sum = 0;
+  [...tbody.rows].forEach(tr => {
+    const g = Number(tr.querySelector('.l-grams').value), p = Number(tr.querySelector('.l-price').value);
+    const t = g > 0 && p > 0 ? g * p : 0;
+    tr.querySelector('.l-total').textContent = t ? fmt(t) : '—';
+    sum += t;
+  });
+  $('tBefore').textContent = fmt(sum);
+  $('tVat').textContent = fmt(sum * VAT_RATE);
+  $('tTotal').textContent = fmt(sum * (1 + VAT_RATE));
+}
+addLine();
+
+// ---------- שליחה ----------
+const msg = $('msg');
+function showMsg(cls, html) { msg.className = 'msg show ' + cls; msg.innerHTML = html; }
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  msg.className = 'msg';
+  const btn = $('submit');
+
+  // אם לא נבחר לקוח מהרשימה אבל הוקלד מספר — משתמשים בו ישירות
+  if (!$('custname').value && /^\d+$/.test(custSearch.value.trim())) {
+    $('custname').value = custSearch.value.trim();
+    loadCustDetails($('custname').value);
+  }
+  if (!$('custname').value) {
+    showMsg('err', 'יש לבחור לקוח מרשימת החיפוש, או להקליד מספר לקוח (ספרות בלבד).');
+    custSearch.focus();
+    return;
+  }
+
+  const details = $('details').value.trim();
+  btn.disabled = true; btn.textContent = 'שולח…';
+  try {
+    // מניעת כפילויות: אם יש מזהה הזמנה, בודקים שלא קיימת כבר חשבונית עם אותו מזהה
+    if (details) {
+      const dup = await api('/api/invoices/check?details=' + encodeURIComponent(details));
+      if (dup.value && dup.value.length) {
+        const d = dup.value[0];
+        showMsg('warn', `⚠️ כבר קיימת חשבונית עם המזהה הזה: <b class="num-ltr">${d.IVNUM}</b> (${d.STATDES}, ${fmt(d.TOTPRICE)}).\nכדי להפיק בכל זאת — שנו את שדה הפרטים ושלחו שוב.`);
+        return;
+      }
+    }
+
+    const data = await api('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        custname: $('custname').value,
+        date: $('date').value,
+        details,
+        lines: readLines(),
+      }),
+    });
+    showMsg('ok',
+      `✔ החשבונית נוצרה בהצלחה!\n<span class="big num-ltr">${data.ivnum}</span> · ${data.status}\n` +
+      `לפני מע"מ: ${fmt(data.beforeVat)} · מע"מ: ${fmt(data.vat)} · <b>סה"כ: ${fmt(data.total)}</b>\n` +
+      `<button type="button" class="close-btn" data-iv="${data.ivnum}" style="margin-top:6px">סגירה ל-IN</button>`);
+    // איפוס שורות לקראת החשבונית הבאה
+    tbody.innerHTML = ''; addLine(); $('details').value = ''; recalc();
+    loadRecent();
+  } catch (err) {
+    showMsg('err', '✖ ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'הפקת חשבונית';
+  }
+});
+
+// ---------- חשבוניות אחרונות ----------
+async function loadRecent() {
+  const el = $('recentBody');
+  try {
+    const data = await api('/api/invoices/recent');
+    const rows = data.value || [];
+    if (!rows.length) { el.textContent = 'אין עדיין חשבוניות.'; return; }
+    el.innerHTML = `<table><thead><tr>
+        <th>מספר</th><th>תאריך</th><th>לקוח</th><th>סטטוס</th><th>סה"כ</th><th>פרטים</th><th></th>
+      </tr></thead><tbody>` +
+      rows.map(r => `<tr>
+        <td class="num-ltr">${r.IVNUM}</td>
+        <td>${(r.IVDATE || '').slice(0, 10).split('-').reverse().join('/')}</td>
+        <td>${r.CDES || r.CUSTNAME || ''}</td>
+        <td class="${r.STATDES === 'טיוטא' ? 'draft' : 'final'}">${r.STATDES || ''}</td>
+        <td>${fmt(r.TOTPRICE)}</td>
+        <td style="color:var(--muted)">${r.DETAILS || ''}</td>
+        <td style="white-space:nowrap">${r.STATDES === 'טיוטא' ? `<button type="button" class="close-btn" data-iv="${r.IVNUM}">סגירה ל-IN</button> ` : ''}<button type="button" class="close-btn dl-btn" data-iv="${r.IVNUM}" title="הורדת מסמך החשבונית">PDF ⬇</button></td>
+      </tr>`).join('') + '</tbody></table>';
+  } catch (e) {
+    el.innerHTML = `<span style="color:var(--err)">${e.message}</span>`;
+  }
+}
+$('refreshBtn').addEventListener('click', loadRecent);
+loadRecent();
+
+// ---------- סגירת חשבונית (טיוטה -> סופית IN) ----------
+async function closeInvoice(ivnum, btn) {
+  if (!confirm(`לסגור את חשבונית ${ivnum}?\nהחשבונית תהפוך לסופית (מספר IN) — פעולה שאי אפשר לבטל.`)) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'סוגר…'; }
+  try {
+    const data = await api('/api/invoices/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ivnum }),
+    });
+    showMsg('ok', `✔ החשבונית נסגרה: <b class="num-ltr">${data.ivnum}</b>${data.status ? ' · ' + data.status : ''}\nה-PDF יורד אוטומטית… <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" style="margin-top:6px">הורדה חוזרת ⬇</button>`);
+    // הורדת המסמך אוטומטית מיד אחרי הסגירה
+    const autoBtn = msg.querySelector('.dl-btn');
+    if (autoBtn) downloadInvoice(data.ivnum, autoBtn);
+  } catch (err) {
+    showMsg('err', '✖ סגירת החשבונית נכשלה:\n' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'סגירה ל-IN'; }
+    loadRecent();
+  }
+}
+async function downloadInvoice(ivnum, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'מפיק…';
+  try {
+    const res = await fetch('/api/invoices/document?ivnum=' + encodeURIComponent(ivnum));
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'הפקת המסמך נכשלה');
+    }
+    if (ct.includes('application/json')) {
+      // השרת החזיר קישור במקום קובץ
+      const data = await res.json();
+      if (data.url) { window.open(data.url, '_blank'); return; }
+      throw new Error(data.error || 'לא התקבל מסמך');
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = ivnum + (ct.includes('pdf') ? '.pdf' : '.html');
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    showMsg('err', '✖ הורדת החשבונית נכשלה:\n' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.close-btn');
+  if (!b) return;
+  if (b.classList.contains('dl-btn')) downloadInvoice(b.dataset.iv, b);
+  else closeInvoice(b.dataset.iv, b);
+});
+</script>
+</body>
+</html>

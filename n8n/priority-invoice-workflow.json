@@ -1,0 +1,270 @@
+{
+  "name": "Priority - הפקת חשבונית מס (API)",
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "note1",
+      "name": "הסבר",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, -420],
+      "parameters": {
+        "width": 900,
+        "height": 300,
+        "content": "## Priority – הפקת חשבונית מס דרך n8n\n\n**קלט (Webhook POST או הפעלה ידנית):**\n```json\n{ \"custname\": \"301755\", \"date\": \"2026-10-05\", \"details\": \"הזמנה 1234\",\n  \"lines\": [ { \"partname\": \"14\", \"grams\": 2, \"price\": 350 } ] }\n```\n`date` לא חובה – ברירת מחדל: היום (שעון ישראל). `details` מומלץ – משמש למניעת כפילויות.\n\n**מה קורה:** ולידציה → תאריך ISO עם אזור זמן Asia/Jerusalem (קיץ/חורף אוטומטי) → בדיקת כפילות לפי DETAILS → POST ל-AINVOICES → תשובה עם IVNUM (טיוטה T), סכומים, או הודעת השגיאה של Priority כלשונה.\n\n**לפני הרצה:** (1) ב-\"הגדרות\" לבחור חברה: `zaban` = ייצור, `zabant` = טסט. (2) בשני ה-HTTP nodes לבחור את ה-Credential \"Priority API\" (Basic Auth). (3) **לא להפעיל Retry** – בקשה שנתקעה אולי כן נוצרה ב-Priority.\n\n**חשוב:** OData יוצר רק טיוטה. סגירה ל-IN והפקת PDF אפשריות רק דרך השרת המקומי (node כבוי בסוף)."
+      }
+    },
+    {
+      "id": "webhook1",
+      "name": "Webhook – קבלת בקשה",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-200, 0],
+      "webhookId": "7c1f4a9e-3b2d-4f6e-9a8b-priorityinvoice",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "priority-invoice",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "manual1",
+      "name": "הפעלה ידנית (בדיקה)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-200, 240],
+      "parameters": {}
+    },
+    {
+      "id": "testdata1",
+      "name": "נתוני בדיקה",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [20, 240],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "t1", "name": "custname", "value": "101010", "type": "string" },
+            { "id": "t2", "name": "date", "value": "", "type": "string" },
+            { "id": "t3", "name": "details", "value": "בדיקת n8n - למחוק", "type": "string" },
+            { "id": "t4", "name": "lines", "value": "=[{\"partname\":\"14\",\"grams\":1,\"price\":1}]", "type": "array" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "settings1",
+      "name": "הגדרות",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [260, 120],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "s1", "name": "baseUrl", "value": "https://iis.zaban-bechor.co.il/odata/Priority/tabula15.ini", "type": "string" },
+            { "id": "s2", "name": "company", "value": "zaban", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "code1",
+      "name": "בניית בקשה",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 120],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "jsCode": "// מקבל קלט מ-Webhook (תחת body) או מהפעלה ידנית (ברמה העליונה)\nconst input = $input.first().json;\nconst src = input.body && typeof input.body === 'object' ? input.body : input;\n\nconst custname = String(src.custname ?? '').trim();\nconst today = DateTime.now().setZone('Asia/Jerusalem').toFormat('yyyy-MM-dd');\nconst date = String(src.date ?? '').trim() || today;\nconst details = String(src.details ?? '').trim();\nconst lines = Array.isArray(src.lines) ? src.lines : [];\n\n// ולידציה – אותם כללים כמו בממשק המקומי\nconst errors = [];\nif (!custname) errors.push('חסר מספר לקוח');\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) errors.push('תאריך לא תקין (YYYY-MM-DD)');\nif (!lines.length) errors.push('חייבת להיות לפחות שורה אחת');\nlines.forEach((l, i) => {\n  if (!l.partname || !String(l.partname).trim()) errors.push(`שורה ${i + 1}: חסר מק\"ט`);\n  if (!(Number(l.grams) > 0)) errors.push(`שורה ${i + 1}: כמות בגרם חייבת להיות גדולה מ-0`);\n  if (!(Number(l.price) > 0)) errors.push(`שורה ${i + 1}: מחיר לגרם חייב להיות גדול מ-0`);\n});\nif (errors.length) throw new Error(errors.join(' | '));\n\n// תאריך ISO עם אזור הזמן של ישראל – +03:00 בקיץ, +02:00 בחורף, אוטומטית\nconst ivdate = DateTime.fromISO(date, { zone: 'Asia/Jerusalem' }).startOf('day').toISO({ suppressMilliseconds: true });\n\nconst payload = {\n  CUSTNAME: custname,\n  IVDATE: ivdate,\n  OWNERLOGIN: 'API',\n  IVCODENAME: '02',\n  EDEA_INVTYPE: '1',\n  AINVOICEITEMS_SUBFORM: lines.map(l => ({\n    PARTNAME: String(l.partname).trim(),\n    TQUANT: Number(l.grams),\n    PRICE: Number(l.price),\n  })),\n};\nif (details) payload.DETAILS = details;\n\nreturn [{ json: { payload, details, custname, date } }];"
+      }
+    },
+    {
+      "id": "if_details",
+      "name": "יש מזהה הזמנה?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [740, 120],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            {
+              "id": "d1",
+              "leftValue": "={{ $json.details }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "http_dup",
+      "name": "בדיקת כפילות",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 0],
+      "retryOnFail": false,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('הגדרות').first().json.baseUrl }}/{{ $('הגדרות').first().json.company }}/AINVOICES",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "$select", "value": "IVNUM,IVDATE,STATDES,TOTPRICE,DETAILS" },
+            { "name": "$filter", "value": "=DETAILS eq '{{ $json.details.replace(/'/g, \"''\") }}' and OWNERLOGIN eq 'API'" },
+            { "name": "$top", "value": "5" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "credentials": { "httpBasicAuth": { "id": "", "name": "Priority API" } }
+    },
+    {
+      "id": "if_exists",
+      "name": "כבר קיימת?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1220, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+          "conditions": [
+            {
+              "id": "e1",
+              "leftValue": "={{ ($json.value || []).length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "resp_dup",
+      "name": "תשובה: כבר קיימת",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1480, -160],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, duplicate: true, message: 'כבר קיימת חשבונית עם מזהה ההזמנה הזה – לא נשלחה שוב', existing: $json.value[0] }) }}",
+        "options": { "responseCode": 409 }
+      }
+    },
+    {
+      "id": "http_create",
+      "name": "יצירת חשבונית בפריוריטי",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1480, 120],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('הגדרות').first().json.baseUrl }}/{{ $('הגדרות').first().json.company }}/AINVOICES?$expand=AINVOICEITEMS_SUBFORM",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('בניית בקשה').first().json.payload) }}",
+        "options": { "timeout": 30000 }
+      },
+      "credentials": { "httpBasicAuth": { "id": "", "name": "Priority API" } }
+    },
+    {
+      "id": "resp_ok",
+      "name": "תשובה: הצלחה",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1740, 40],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, ivnum: $json.IVNUM, status: $json.STATDES, beforeVat: $json.QPRICE, vat: $json.VAT, total: $json.TOTPRICE, customer: $json.CDES }) }}",
+        "options": { "responseCode": 201 }
+      }
+    },
+    {
+      "id": "resp_err",
+      "name": "תשובה: שגיאת Priority",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1740, 240],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message ?? 'שגיאה מול Priority', priority: $json.error?.description ?? null, hint: 'timeout בלי תשובה = IP לא מאושר בחומת האש; 400 = שגיאת ולידציה של Priority (ראו priority)' }) }}",
+        "options": { "responseCode": 400 }
+      }
+    },
+    {
+      "id": "resp_input_err",
+      "name": "תשובה: שגיאת קלט",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [740, 340],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error?.message ?? $json.error ?? 'קלט לא תקין' }) }}",
+        "options": { "responseCode": 400 }
+      }
+    },
+    {
+      "id": "http_close",
+      "name": "סגירה ל-IN (דרך השרת המקומי) – כבוי",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 440],
+      "disabled": true,
+      "retryOnFail": false,
+      "parameters": {
+        "method": "POST",
+        "url": "http://davidz.zaban-bechor.local:3600/api/invoices/close",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ivnum: $json.IVNUM }) }}",
+        "options": { "timeout": 120000 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook – קבלת בקשה": { "main": [[{ "node": "הגדרות", "type": "main", "index": 0 }]] },
+    "הפעלה ידנית (בדיקה)": { "main": [[{ "node": "נתוני בדיקה", "type": "main", "index": 0 }]] },
+    "נתוני בדיקה": { "main": [[{ "node": "הגדרות", "type": "main", "index": 0 }]] },
+    "הגדרות": { "main": [[{ "node": "בניית בקשה", "type": "main", "index": 0 }]] },
+    "בניית בקשה": {
+      "main": [
+        [{ "node": "יש מזהה הזמנה?", "type": "main", "index": 0 }],
+        [{ "node": "תשובה: שגיאת קלט", "type": "main", "index": 0 }]
+      ]
+    },
+    "יש מזהה הזמנה?": {
+      "main": [
+        [{ "node": "בדיקת כפילות", "type": "main", "index": 0 }],
+        [{ "node": "יצירת חשבונית בפריוריטי", "type": "main", "index": 0 }]
+      ]
+    },
+    "בדיקת כפילות": { "main": [[{ "node": "כבר קיימת?", "type": "main", "index": 0 }]] },
+    "כבר קיימת?": {
+      "main": [
+        [{ "node": "תשובה: כבר קיימת", "type": "main", "index": 0 }],
+        [{ "node": "יצירת חשבונית בפריוריטי", "type": "main", "index": 0 }]
+      ]
+    },
+    "יצירת חשבונית בפריוריטי": {
+      "main": [
+        [{ "node": "תשובה: הצלחה", "type": "main", "index": 0 }],
+        [{ "node": "תשובה: שגיאת Priority", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

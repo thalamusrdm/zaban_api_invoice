@@ -1,0 +1,21 @@
+# סודות — לעולם לא לקומיט
+.env
+.env.*
+!.env.example
+
+# ריצה
+requests.log
+*.log
+node_modules/
+
+# חבילות ניידות (כוללות node.exe, ~80MB)
+dist/
+
+# מערכת הפעלה / עורכים
+Thumbs.db
+.DS_Store
+.vscode/
+
+# ארכיונים שעלולים להכיל .env
+zaban_api_env.zip
+*.zip
