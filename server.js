@@ -1,10 +1,11 @@
 // שרת מקומי להפקת חשבוניות מס בפריוריטי.
-// אפס תלויות – Node 18+ בלבד. הפעלה: node server.js
+// Node 18+; install dependencies with npm ci, then run npm start.
 'use strict';
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { buildInvoicePayload, INVOICE_TYPES, CURRENCIES } = require('./invoice-payload');
 let sdk; // נטען אחרי קריאת .env (ראו למטה)
 
 // ---------- טעינת .env ----------
@@ -39,17 +40,6 @@ function log(entry) {
   const line = JSON.stringify({ ts: new Date().toISOString(), ...entry });
   fs.appendFile(LOG_FILE, line + '\n', () => {});
   console.log(line);
-}
-
-// תאריך ISO באזור הזמן Asia/Jerusalem, כולל שעון קיץ/חורף
-function jerusalemIso(dateStr /* YYYY-MM-DD */) {
-  const noon = new Date(`${dateStr}T12:00:00Z`);
-  const parts = new Intl.DateTimeFormat('en', {
-    timeZone: 'Asia/Jerusalem', timeZoneName: 'longOffset',
-  }).formatToParts(noon);
-  const tz = parts.find(p => p.type === 'timeZoneName').value; // "GMT+03:00"
-  const offset = tz.replace('GMT', '') || '+00:00';
-  return `${dateStr}T00:00:00${offset}`;
 }
 
 // ---------- קריאה ל-Priority ----------
@@ -99,6 +89,16 @@ const odataStr = s => String(s).replace(/'/g, "''");
 
 // ---------- Handlers ----------
 const handlers = {
+  // Suggestions contain codes/descriptions only, never customer or invoice data.
+  'GET /api/invoices/options': async () => {
+    if (invoiceOptionsCache && Date.now() - invoiceOptionsCache.ts < 10 * 60 * 1000) return invoiceOptionsCache.data;
+    const data = await priority('GET', 'AINVOICES?$select=WARHSNAME,WARHSDES,LOCNAME,AGENTCODE,AGENTNAME&$orderby=IV desc&$top=100');
+    const rows = data.value || [];
+    const unique = (code, label) => [...new Map(rows.filter(r => r[code]).map(r => [r[code], { code: r[code], label: r[label] || r[code] }])).values()];
+    const options = { invoiceTypes: INVOICE_TYPES, currencies: CURRENCIES, warehouses: unique('WARHSNAME', 'WARHSDES'), agents: unique('AGENTCODE', 'AGENTNAME') };
+    invoiceOptionsCache = { ts: Date.now(), data: options };
+    return options;
+  },
   // בדיקת חיבור
   'GET /api/health': async () => {
     await priority('GET', `AINVOICES?$top=1&$select=IVNUM`);
@@ -273,31 +273,7 @@ const handlers = {
 
   // יצירת חשבונית
   'POST /api/invoices': async (_q, body) => {
-    const { custname, date, details, lines } = body || {};
-
-    // ולידציה
-    if (!custname || !String(custname).trim()) throw badRequest('חסר מספר לקוח');
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw badRequest('תאריך לא תקין');
-    if (!Array.isArray(lines) || lines.length === 0) throw badRequest('חייבת להיות לפחות שורה אחת');
-    for (const [i, l] of lines.entries()) {
-      if (!l.partname || !String(l.partname).trim()) throw badRequest(`שורה ${i + 1}: חסר מק"ט`);
-      if (!(Number(l.grams) > 0)) throw badRequest(`שורה ${i + 1}: כמות בגרם חייבת להיות גדולה מ-0`);
-      if (!(Number(l.price) > 0)) throw badRequest(`שורה ${i + 1}: מחיר לגרם חייב להיות גדול מ-0`);
-    }
-
-    const payload = {
-      CUSTNAME: String(custname).trim(),
-      IVDATE: jerusalemIso(date),
-      OWNERLOGIN: USER,
-      IVCODENAME: '02',
-      EDEA_INVTYPE: '1',
-      DETAILS: (details || '').trim() || undefined,
-      AINVOICEITEMS_SUBFORM: lines.map(l => ({
-        PARTNAME: String(l.partname).trim(),
-        TQUANT: Number(l.grams),
-        PRICE: Number(l.price),
-      })),
-    };
+    const payload = buildInvoicePayload(body, USER);
 
     const inv = await priority('POST', 'AINVOICES?$expand=AINVOICEITEMS_SUBFORM', payload);
     return {
@@ -316,6 +292,7 @@ function badRequest(msg) { const e = new Error(msg); e.status = 400; return e; }
 const CUST_EDITABLE = ['WTAXNUM', 'WTAXNUMEXPL', 'VATNUM', 'BUSINESSTYPE', 'CTYPECODE', 'CTYPE2CODE', 'PCUSTNAME', 'EDEA_CONSIGWARHSNAME'];
 
 let custCache = { data: null, ts: 0 };
+let invoiceOptionsCache = null;
 
 // ---------- HTTP server ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };

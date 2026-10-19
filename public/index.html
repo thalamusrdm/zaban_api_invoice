@@ -15,7 +15,7 @@
     margin: 0; background: var(--bg); color: var(--text);
     font-family: "Segoe UI", system-ui, sans-serif; font-size: 15px;
   }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
   h1 { font-size: 22px; margin: 0; }
   #env { font-size: 13px; color: var(--muted); }
@@ -28,11 +28,24 @@
   @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
 
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input, button {
+  input, button, select {
     font: inherit; border-radius: 7px; border: 1px solid var(--border);
     padding: 8px 10px; width: 100%; background: #fff; color: var(--text);
   }
-  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  .invoice-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 18px 0; padding: 18px 0; border-block: 1px solid var(--border); }
+  .field-note { color: var(--muted); font-size: 12px; margin: 5px 0 0; }
+  .section-caption { margin: 18px 0 8px; font-weight: 600; font-size: 15px; }
+  .table-scroll { overflow-x: auto; padding-bottom: 8px; }
+  #lines { min-width: 1080px; }
+  #lines th:first-child { width: 23%; }
+  #lines th { vertical-align: bottom; }
+  #lines td { vertical-align: top; }
+  #lines input, #lines select { min-width: 76px; }
+  #lines .l-exchange { min-width: 98px; }
+  .l-unit { color: var(--accent-dark); font-size: 12px; display: block; margin-top: 4px; min-height: 17px; }
+  #optionsStatus { min-height: 18px; }
+  @media (max-width: 640px) { .invoice-fields { grid-template-columns: 1fr 1fr; } .totals { flex-wrap: wrap; gap: 16px; } header { flex-wrap: wrap; } }
   input[type=number] { direction: ltr; text-align: right; }
 
   .cust { position: relative; }
@@ -167,17 +180,31 @@
     </div>
     <div style="margin-top:14px">
       <label for="details">פרטים / מזהה הזמנה (מומלץ — משמש למניעת כפילויות)</label>
-      <input id="details" placeholder='למשל: הזמנה 1234'>
+      <input id="details" maxlength="24" placeholder='למשל: הזמנה 1234'>
     </div>
-
+    <div class="invoice-fields">
+      <div><label for="invoiceType">סוג חשבונית</label><select id="invoiceType" required>
+        <option value="1">זהב</option><option value="2">יהלומים</option><option value="4">תכשיטים בשיבוץ יהלומי מעבדה</option>
+      </select></div>
+      <div><label for="warehouse">מחסן שולח</label><input id="warehouse" maxlength="4" list="warehouseOptions" placeholder="ברירת המחדל בפריוריטי"><datalist id="warehouseOptions"></datalist></div>
+      <div><label for="location">איתור במחסן</label><input id="location" maxlength="14" placeholder="ברירת המחדל בפריוריטי"></div>
+      <div><label for="agent">סוכן</label><input id="agent" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי"><datalist id="agentOptions"></datalist></div>
+      <div><label for="booknum">חשבונית פנקס</label><input id="booknum" maxlength="48" placeholder="לא חובה"></div>
+      <div><label for="discount">הנחה כללית (%)</label><input id="discount" type="number" min="0" max="100" step="0.01" value="0"></div>
+    </div>
+    <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
+    <h2 class="section-caption">פירוט החשבונית</h2>
+    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר לפני מע״מ ובמטבע שנבחר; במטבע חוץ יש להזין שער לש״ח.</p>
+    <div class="table-scroll" role="region" aria-label="שורות החשבונית" tabindex="0">
     <table id="lines">
-      <thead><tr><th style="width:28%">מק"ט (קראט)</th><th style="width:24%">כמות בגרם</th><th style="width:24%">מחיר לגרם (לפני מע"מ)</th><th style="width:18%">סה"כ שורה</th><th></th></tr></thead>
+      <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col">מחיר ליחידה</th><th scope="col">מטבע מחיר</th><th scope="col">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ שורה בש״ח</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
       <tbody></tbody>
     </table>
+    </div>
     <button type="button" class="addline" id="addLine">+ הוספת שורה</button>
 
     <div class="totals">
-      <div><span class="lbl">לפני מע"מ</span><b id="tBefore">0.00 ₪</b></div>
+      <div><span class="lbl">לפני מע״מ, אחרי הנחות</span><b id="tBefore">0.00 ₪</b></div>
       <div><span class="lbl">מע"מ 18%</span><b id="tVat">0.00 ₪</b></div>
       <div><span class="lbl">סה"כ לתשלום</span><b id="tTotal">0.00 ₪</b></div>
     </div>
@@ -195,11 +222,13 @@
   </div>
 </div>
 
+<script src="/invoice-calculations.js"></script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
 const VAT_RATE = 0.18;
 const fmt = n => (Number(n) || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₪';
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -207,6 +236,18 @@ async function api(path, opts) {
   if (!res.ok) throw new Error(data.error || 'שגיאה לא ידועה');
   return data;
 }
+
+(async () => {
+  try {
+    const options = await api('/api/invoices/options');
+    for (const [id, values] of [['warehouseOptions', options.warehouses], ['agentOptions', options.agents]]) {
+      $(id).replaceChildren(...values.map(x => new Option(`${x.code} — ${x.label}`, x.code)));
+    }
+    $('optionsStatus').textContent = 'הצעות מתוך חשבוניות אחרונות. שדות ריקים למחסן, איתור וסוכן ייקבעו בפריוריטי.';
+  } catch {
+    $('optionsStatus').textContent = 'הצעות למחסנים ולסוכנים אינן זמינות כרגע. אפשר להזין קוד ידנית או להשאיר ריק לברירת המחדל בפריוריטי.';
+  }
+})();
 
 // ---------- תאריך ברירת מחדל: היום בישראל ----------
 $('date').value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date());
@@ -397,23 +438,27 @@ document.addEventListener('click', e => { if (!e.target.closest('.cust')) custLi
 // ---------- שורות ----------
 const tbody = $('lines').querySelector('tbody');
 
-function addLine(partname = '14', grams = '', price = '') {
+function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = '', price = '') {
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td class="part-cell"><input class="l-part" value="${partname}" required autocomplete="off" placeholder="מק&quot;ט או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
-    <td><input class="l-grams" type="number" step="0.01" min="0.01" value="${grams}" required></td>
-    <td><input class="l-price" type="number" step="0.01" min="0.01" value="${price}" required></td>
+    <td class="part-cell"><input class="l-part" aria-label="מק״ט" maxlength="22" value="${escapeHtml(partname)}" required autocomplete="off" placeholder="מק&quot;ט או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
+    <td><input class="l-grams" aria-label="כמות" type="number" step="0.001" min="0.001" value="${grams}" required><span class="l-unit">לפי המוצר</span></td>
+    <td><input class="l-price" aria-label="מחיר ליחידה" type="number" step="0.01" min="0.01" value="${price}" required></td>
+    <td><select class="l-currency" aria-label="מטבע מחיר"><option value='ש&quot;ח'>ש״ח</option><option value="$">$</option><option value="USD">USD</option></select></td>
+    <td><input class="l-exchange" aria-label="שער חליפין לש״ח" type="number" step="0.000001" min="0.000001" max="9999999.999999" value="1" readonly required></td>
+    <td><input class="l-discount" aria-label="הנחה לשורה באחוזים" type="number" step="0.01" min="0" max="100" value="0"></td>
     <td class="l-total" style="color:var(--muted)">—</td>
     <td><button type="button" class="del" title="מחיקת שורה">✕</button></td>`;
   tbody.appendChild(tr);
-  tr.querySelector('.l-grams').focus();
+  tr.querySelector('.l-grams').focus({ preventScroll: true });
   // מק"ט שהגיע מוכן (ברירת מחדל 14) — משלימים את התיאור שלו מפריוריטי
   if (partname) {
     api('/api/parts?q=' + encodeURIComponent(partname)).then(data => {
       const p = (data.value || []).find(x => x.PARTNAME === partname);
-      if (p && tr.isConnected) {
+      if (p && tr.isConnected && tr.querySelector('.l-part').value.trim() === partname) {
         const unit = p.PUNITNAME || p.UNITNAME || '';
-        tr.querySelector('.l-desc').innerHTML = `<b>${p.PARTDES || ''}</b>${unit ? ' · יחידה: ' + unit : ''}`;
+        tr.querySelector('.l-desc').textContent = p.PARTDES || '';
+        tr.querySelector('.l-unit').textContent = unit || 'לפי המוצר';
       }
     }).catch(() => {});
   }
@@ -426,6 +471,22 @@ tbody.addEventListener('click', e => {
   }
 });
 tbody.addEventListener('input', recalc);
+tbody.addEventListener('change', e => {
+  if (e.target.classList.contains('l-currency')) {
+    const exchange = e.target.closest('tr').querySelector('.l-exchange');
+    exchange.readOnly = e.target.value === 'ש"ח';
+    exchange.value = exchange.readOnly ? '1' : '';
+  }
+  recalc();
+});
+$('discount').addEventListener('input', recalc);
+$('invoiceType').addEventListener('change', () => {
+  const rows = [...tbody.rows];
+  if (rows.length === 1 && ['', '14'].includes(rows[0].querySelector('.l-part').value) && !rows[0].querySelector('.l-grams').value && !rows[0].querySelector('.l-price').value && Number(rows[0].querySelector('.l-discount').value) === 0 && rows[0].querySelector('.l-currency').value === 'ש"ח') {
+    tbody.replaceChildren(); addLine();
+  }
+  recalc();
+});
 
 // ---------- השלמה אוטומטית של מק"ט (חיפוש ב-Priority תוך כדי הקלדה) ----------
 const partState = new WeakMap(); // input -> { timer, items, active }
@@ -454,10 +515,9 @@ function pickPart(input, i) {
   const tr = partRow(input);
   input.value = p.PARTNAME;
   const unit = p.PUNITNAME || p.UNITNAME || '';
-  tr.querySelector('.l-desc').innerHTML = `<b>${p.PARTDES || ''}</b>${unit ? ' · יחידה: ' + unit : ''}${p.FAMILYDES ? ' · ' + p.FAMILYDES : ''}`;
-  // מילוי מחיר אחרון מפריוריטי רק אם השדה ריק — המשתמש תמיד יכול לשנות
-  const price = tr.querySelector('.l-price');
-  if (!price.value && Number(p.LASTPRICE) > 0) price.value = Number(p.LASTPRICE);
+  tr.querySelector('.l-desc').textContent = [p.PARTDES, p.FAMILYDES].filter(Boolean).join(' · ');
+  tr.querySelector('.l-unit').textContent = unit || 'לפי המוצר';
+  // LASTPRICE has no currency context here; price must be entered explicitly.
   hidePartList(input);
   recalc();
   tr.querySelector('.l-grams').focus();
@@ -470,6 +530,7 @@ tbody.addEventListener('input', e => {
   partState.set(input, st);
   clearTimeout(st.timer);
   partRow(input).querySelector('.l-desc').textContent = '';
+  partRow(input).querySelector('.l-unit').textContent = 'לפי המוצר';
   const q = input.value.trim();
   if (!q) { hidePartList(input); return; }
   st.timer = setTimeout(async () => {
@@ -514,22 +575,24 @@ tbody.addEventListener('focusout', e => {
 function readLines() {
   return [...tbody.rows].map(tr => ({
     partname: tr.querySelector('.l-part').value.trim(),
-    grams: Number(tr.querySelector('.l-grams').value),
+    quantity: Number(tr.querySelector('.l-grams').value),
     price: Number(tr.querySelector('.l-price').value),
+    currency: tr.querySelector('.l-currency').value,
+    exchange: tr.querySelector('.l-exchange').value,
+    discount: Number(tr.querySelector('.l-discount').value),
   }));
 }
 
 function recalc() {
-  let sum = 0;
-  [...tbody.rows].forEach(tr => {
-    const g = Number(tr.querySelector('.l-grams').value), p = Number(tr.querySelector('.l-price').value);
-    const t = g > 0 && p > 0 ? g * p : 0;
-    tr.querySelector('.l-total').textContent = t ? fmt(t) : '—';
-    sum += t;
+  const lines = readLines();
+  [...tbody.rows].forEach((tr, i) => {
+    const t = InvoiceCalculations.lineTotal(lines[i]);
+    tr.querySelector('.l-total').textContent = t === null ? 'חסר שער' : t ? fmt(t) : '—';
   });
-  $('tBefore').textContent = fmt(sum);
-  $('tVat').textContent = fmt(sum * VAT_RATE);
-  $('tTotal').textContent = fmt(sum * (1 + VAT_RATE));
+  const totals = InvoiceCalculations.totals(lines, Number($('discount').value), VAT_RATE);
+  $('tBefore').textContent = totals ? fmt(totals.beforeVat) : '—';
+  $('tVat').textContent = totals ? fmt(totals.vat) : '—';
+  $('tTotal').textContent = totals ? fmt(totals.total) : '—';
 }
 addLine();
 
@@ -573,6 +636,12 @@ $('form').addEventListener('submit', async e => {
         custname: $('custname').value,
         date: $('date').value,
         details,
+        invoiceType: $('invoiceType').value,
+        warehouse: $('warehouse').value.trim(),
+        location: $('location').value.trim(),
+        agent: $('agent').value.trim(),
+        booknum: $('booknum').value.trim(),
+        discount: $('discount').value,
         lines: readLines(),
       }),
     });

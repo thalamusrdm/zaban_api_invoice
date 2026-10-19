@@ -4,7 +4,7 @@
   "description": "ממשק לוקאלי קל להפקת חשבוניות מס (טיוטות) ב-Priority דרך ה-OData API. אפס תלויות — דורש רק Node.js 18 ומעלה.",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "start": "node server.js"
   },
   "keywords": [],
