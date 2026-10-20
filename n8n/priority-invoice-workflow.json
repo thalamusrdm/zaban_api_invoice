@@ -228,7 +228,7 @@
       "retryOnFail": false,
       "parameters": {
         "method": "POST",
-        "url": "http://davidz.zaban-bechor.local:3600/api/invoices/close",
+        "url": "http://davidz.zaban-bechor.local:18473/api/invoices/close",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ ivnum: $json.IVNUM }) }}",

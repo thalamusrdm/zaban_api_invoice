@@ -33,16 +33,27 @@
     padding: 8px 10px; width: 100%; background: #fff; color: var(--text);
   }
   input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  input[readonly] { background: #f5f6f8; color: #475467; cursor: default; }
   .invoice-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 18px 0; padding: 18px 0; border-block: 1px solid var(--border); }
   .field-note { color: var(--muted); font-size: 12px; margin: 5px 0 0; }
   .section-caption { margin: 18px 0 8px; font-weight: 600; font-size: 15px; }
-  .table-scroll { overflow-x: auto; padding-bottom: 8px; }
-  #lines { min-width: 1080px; }
-  #lines th:first-child { width: 23%; }
+  .table-scroll { overflow: visible; padding-bottom: 8px; }
+  #lines { width: 100%; min-width: 0; table-layout: fixed; }
+  #lines th:nth-child(1) { width: 28%; }
+  #lines th:nth-child(2) { width: 9%; }
+  #lines th:nth-child(3) { width: 14%; }
+  #lines th:nth-child(5) { width: 12%; }
+  #lines th:nth-child(6) { width: 10%; }
+  #lines th:nth-child(7) { width: 20%; }
+  #lines th:nth-child(8) { width: 7%; }
   #lines th { vertical-align: bottom; }
   #lines td { vertical-align: top; }
-  #lines input, #lines select { min-width: 76px; }
-  #lines .l-exchange { min-width: 98px; }
+  #lines input, #lines select { min-width: 0; width: 100%; padding: 7px 4px; }
+  #lines td, #lines th { padding-inline: 3px; overflow-wrap: anywhere; }
+  #lines .l-exchange { min-width: 0; }
+  #lines .l-desc { overflow-wrap: anywhere; }
+  #lines .del { width: 100%; padding-inline: 0; }
+  @media (max-width: 700px) { #form { padding: 12px; } #lines input, #lines td { font-size: 12px; } #lines th { font-size: 11px; } }
   .l-unit { color: var(--accent-dark); font-size: 12px; display: block; margin-top: 4px; min-height: 17px; }
   #optionsStatus { min-height: 18px; }
   @media (max-width: 640px) { .invoice-fields { grid-template-columns: 1fr 1fr; } .totals { flex-wrap: wrap; gap: 16px; } header { flex-wrap: wrap; } }
@@ -130,6 +141,22 @@
   .close-btn:hover { background: var(--accent); color: #fff; }
   .close-btn:disabled { opacity: .5; cursor: wait; }
   .num-ltr { direction: ltr; display: inline-block; }
+  [hidden] { display: none !important; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+  .type-picker { padding: 64px 0 32px; }
+  .type-picker .eyebrow { color: var(--accent-dark); font-size: 13px; font-weight: 600; }
+  .type-picker h2 { font-size: clamp(28px, 4vw, 40px); margin: 12px 0; }
+  .type-picker p { color: var(--muted); line-height: 1.7; }
+  .type-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 32px; }
+  .type-choice { text-align: right; padding: 28px; min-height: 240px; border-radius: 12px; cursor: pointer; border-top: 4px solid var(--choice-color); display: flex; flex-direction: column; align-items: flex-start; gap: 16px; box-shadow: 0 6px 24px #1a223305; transition: border-color .15s, box-shadow .15s; }
+  .type-choice:hover { border-color: var(--choice-color); box-shadow: 0 8px 28px #1a223312; }
+  .type-choice svg { width: 40px; height: 40px; fill: none; stroke: var(--choice-color); stroke-width: 1.5; }
+  .type-choice strong { font-size: 22px; line-height: 1.4; }
+  .type-choice .choice-next { margin-top: auto; color: var(--accent-dark); font-size: 14px; }
+  .invoice-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .invoice-heading h2 { font-size: 22px; margin: 0; }
+  .invoice-heading p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+  @media (max-width: 700px) { .type-picker { padding-top: 8px; } .type-choices { grid-template-columns: 1fr; gap: 12px; margin-top: 20px; } .type-choice { min-height: 100px; padding: 16px; display: grid; grid-template-columns: 40px 1fr; gap: 6px 16px; align-items: center; } .type-choice svg { grid-row: 1 / 3; } .type-choice strong { font-size: 19px; } .type-choice .choice-next { grid-column: 2; } .invoice-heading { align-items: flex-start; flex-wrap: wrap; } }
 </style>
 </head>
 <body>
@@ -139,6 +166,31 @@
     <span id="env"><span id="envText">בודק חיבור…</span><span class="dot"></span></span>
   </header>
 
+  <section class="type-picker" id="typePicker" aria-labelledby="typePickerTitle">
+    <span class="eyebrow">חשבונית חדשה</span>
+    <h2 id="typePickerTitle" tabindex="-1">איזו חשבונית נרצה להפיק?</h2>
+    <p>בחרו את סוג החשבונית כדי לפתוח את הטופס המתאים.</p>
+    <div class="type-choices">
+      <button type="button" class="type-choice" data-type="1" style="--choice-color:#b8860b">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 14h20l6 17H4zM10 14l5-6h10l5 6M4 31h32M14 20h12"/></svg>
+        <strong>זהב</strong><span class="choice-next">פתיחת חשבונית זהב ←</span>
+      </button>
+      <button type="button" class="type-choice" data-type="2" style="--choice-color:#47798d">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 15l8-9h16l8 9-16 20zM4 15h32M12 6l8 29 8-29M12 15l8-9 8 9"/></svg>
+        <strong>יהלומים</strong><span class="choice-next">פתיחת חשבונית יהלומים ←</span>
+      </button>
+      <button type="button" class="type-choice" data-type="4" style="--choice-color:#687d60">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="26" r="10"/><path d="M13 9l4-5h6l4 5-7 9zM13 9h14M17 4l3 14 3-14"/></svg>
+        <strong>תכשיטים בשיבוץ יהלומי מעבדה</strong><span class="choice-next">פתיחת חשבונית תכשיטים ←</span>
+      </button>
+    </div>
+  </section>
+
+  <section id="invoiceScreen" hidden aria-labelledby="selectedTypeTitle">
+  <div class="invoice-heading">
+    <div><h2 id="selectedTypeTitle" tabindex="-1"></h2><p id="selectedTypeNote"></p></div>
+    <button type="button" class="mini-btn" id="changeType">החלפת סוג חשבונית</button>
+  </div>
   <form class="card" id="form" autocomplete="off">
     <div class="grid">
       <div class="cust">
@@ -176,6 +228,7 @@
       <div>
         <label for="date">תאריך חשבונית</label>
         <input type="date" id="date" required>
+        <p class="field-note" id="exchangeStatus" role="status">טוען שער דולר מבנק ישראל…</p>
       </div>
     </div>
     <div style="margin-top:14px">
@@ -183,21 +236,21 @@
       <input id="details" maxlength="24" placeholder='למשל: הזמנה 1234'>
     </div>
     <div class="invoice-fields">
-      <div><label for="invoiceType">סוג חשבונית</label><select id="invoiceType" required>
+      <div hidden><label for="invoiceType">סוג חשבונית</label><select id="invoiceType" required>
         <option value="1">זהב</option><option value="2">יהלומים</option><option value="4">תכשיטים בשיבוץ יהלומי מעבדה</option>
       </select></div>
       <div><label for="warehouse">מחסן שולח</label><input id="warehouse" maxlength="4" list="warehouseOptions" placeholder="ברירת המחדל בפריוריטי"><datalist id="warehouseOptions"></datalist></div>
       <div><label for="location">איתור במחסן</label><input id="location" maxlength="14" placeholder="ברירת המחדל בפריוריטי"></div>
       <div><label for="agent">סוכן</label><input id="agent" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי"><datalist id="agentOptions"></datalist></div>
       <div><label for="booknum">חשבונית פנקס</label><input id="booknum" maxlength="48" placeholder="לא חובה"></div>
-      <div><label for="discount">הנחה כללית (%)</label><input id="discount" type="number" min="0" max="100" step="0.01" value="0"></div>
+      <div><label for="discount">ברירת מחדל להנחת שורה (%)</label><input id="discount" type="number" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote"><p class="field-note" id="discountNote">ממלאת שורות שטרם נערכו ושורות חדשות. הנחה שנערכה בשורה נשמרת, ואין הנחה נוספת על הסכום הכולל.</p></div>
     </div>
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
     <h2 class="section-caption">פירוט החשבונית</h2>
-    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר לפני מע״מ ובמטבע שנבחר; במטבע חוץ יש להזין שער לש״ח.</p>
+    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה, ממחירון הבסיס בפריוריטי. שער הדולר מתמלא מבנק ישראל. המחיר והשער נעולים לעריכה.</p>
     <div class="table-scroll" role="region" aria-label="שורות החשבונית" tabindex="0">
     <table id="lines">
-      <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col">מחיר ליחידה</th><th scope="col">מטבע מחיר</th><th scope="col">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ שורה בש״ח</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
+      <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col">מחיר ($)</th><th scope="col" hidden>מטבע מחיר</th><th scope="col">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
@@ -220,6 +273,7 @@
     <h2>חשבוניות אחרונות (משתמש API) <button type="button" class="refresh" id="refreshBtn">רענון</button></h2>
     <div id="recentBody" style="color:var(--muted);font-size:13.5px">טוען…</div>
   </div>
+  </section>
 </div>
 
 <script src="/invoice-calculations.js"></script>
@@ -283,7 +337,7 @@ function renderCustList(items, emptyMsg) {
   custActive = -1;
   custList.innerHTML = items.length
     ? items.map((c, i) => `<div data-i="${i}">${c.CUSTDES}<span class="num">${c.CUSTNAME}</span></div>`).join('')
-    : `<div style="color:var(--muted);cursor:default">${emptyMsg}</div>`;
+    : `<div style="color:var(--muted);cursor:default">${escapeHtml(emptyMsg)}</div>`;
   custList.hidden = false;
   custList.scrollTop = 0;
 }
@@ -437,31 +491,71 @@ document.addEventListener('click', e => { if (!e.target.closest('.cust')) custLi
 
 // ---------- שורות ----------
 const tbody = $('lines').querySelector('tbody');
+const exchangeRequests = new Map();
+let currentExchangeRates = null;
 
-function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = '', price = '') {
+function setLineExchange(tr) {
+  const currency = tr.querySelector('.l-currency').value;
+  const exchange = tr.querySelector('.l-exchange');
+  const info = currentExchangeRates?.date === $('date').value ? currentExchangeRates.rates[currency] : null;
+  exchange.readOnly = true;
+  exchange.value = currency === 'ש"ח' ? '1' : info?.rate ?? '';
+  exchange.title = currency === 'ש"ח' ? 'מטבע מקומי — שער 1' : info ? `שער יציג מבנק ישראל ליום ${info.rateDate}` : 'ממתינים לשער מבנק ישראל — הפקת החשבונית תתאפשר לאחר טעינתו';
+  exchange.placeholder = 'שער לש״ח';
+}
+
+async function loadExchangeRates() {
+  const date = $('date').value;
+  currentExchangeRates = null;
+  for (const tr of tbody.rows) setLineExchange(tr);
+  recalc();
+  if (!$('date').validity.valid || !date) { $('exchangeStatus').textContent = 'יש לבחור תאריך תקין לטעינת שער דולר.'; return; }
+  $('exchangeStatus').textContent = 'טוען שער דולר מבנק ישראל…';
+  if (!exchangeRequests.has(date)) exchangeRequests.set(date, api('/api/exchange-rates?date=' + encodeURIComponent(date)));
+  try {
+    const data = await exchangeRequests.get(date);
+    if ($('date').value !== date) return;
+    currentExchangeRates = data;
+    const info = data.rates.USD;
+    $('exchangeStatus').textContent = `שער דולר יציג — בנק ישראל: ${info.rate} ₪ · פורסם ב־${info.rateDate}`
+      + (info.rateDate < date ? ' · השער האחרון שפורסם עד תאריך החשבונית' : '');
+  } catch (err) {
+    if ($('date').value !== date) return;
+    $('exchangeStatus').textContent = 'שער הדולר אינו זמין: ' + err.message + ' יש לטעון שער תקין לפני הפקת החשבונית.';
+  }
+  for (const tr of tbody.rows) setLineExchange(tr);
+  recalc();
+}
+$('date').addEventListener('change', loadExchangeRates);
+
+function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = '1', price = '') {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td class="part-cell"><input class="l-part" aria-label="מק״ט" maxlength="22" value="${escapeHtml(partname)}" required autocomplete="off" placeholder="מק&quot;ט או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
     <td><input class="l-grams" aria-label="כמות" type="number" step="0.001" min="0.001" value="${grams}" required><span class="l-unit">לפי המוצר</span></td>
-    <td><input class="l-price" aria-label="מחיר ליחידה" type="number" step="0.01" min="0.01" value="${price}" required></td>
-    <td><select class="l-currency" aria-label="מטבע מחיר"><option value='ש&quot;ח'>ש״ח</option><option value="$">$</option><option value="USD">USD</option></select></td>
+    <td><input class="l-price" aria-label="מחיר ליחידה" type="number" step="0.01" min="0.01" value="${price}" readonly required></td>
+    <td hidden><select class="l-currency" aria-label="מטבע מחיר" tabindex="-1"><option value="USD">USD</option><option value="$">$</option></select></td>
     <td><input class="l-exchange" aria-label="שער חליפין לש״ח" type="number" step="0.000001" min="0.000001" max="9999999.999999" value="1" readonly required></td>
-    <td><input class="l-discount" aria-label="הנחה לשורה באחוזים" type="number" step="0.01" min="0" max="100" value="0"></td>
+    <td><input class="l-discount" aria-label="הנחה לשורה באחוזים" type="number" step="0.01" min="0" max="100" value="${Number($('discount').value) || 0}"></td>
     <td class="l-total" style="color:var(--muted)">—</td>
     <td><button type="button" class="del" title="מחיקת שורה">✕</button></td>`;
   tbody.appendChild(tr);
+  setLineExchange(tr);
   tr.querySelector('.l-grams').focus({ preventScroll: true });
   // מק"ט שהגיע מוכן (ברירת מחדל 14) — משלימים את התיאור שלו מפריוריטי
   if (partname) {
-    api('/api/parts?q=' + encodeURIComponent(partname)).then(data => {
+    const initialType = $('invoiceType').value;
+    api('/api/parts?q=' + encodeURIComponent(partname) + '&invoiceType=' + initialType).then(data => {
       const p = (data.value || []).find(x => x.PARTNAME === partname);
-      if (p && tr.isConnected && tr.querySelector('.l-part').value.trim() === partname) {
+      if (p && tr.isConnected && $('invoiceType').value === initialType && tr.querySelector('.l-part').value.trim() === partname) {
         const unit = p.PUNITNAME || p.UNITNAME || '';
         tr.querySelector('.l-desc').textContent = p.PARTDES || '';
         tr.querySelector('.l-unit').textContent = unit || 'לפי המוצר';
+        if (!tr.querySelector('.l-price').value) applyPartPrice(tr, p);
       }
     }).catch(() => {});
   }
+  return tr;
 }
 $('addLine').addEventListener('click', () => addLine());
 tbody.addEventListener('click', e => {
@@ -470,22 +564,56 @@ tbody.addEventListener('click', e => {
     recalc();
   }
 });
-tbody.addEventListener('input', recalc);
+tbody.addEventListener('input', e => {
+  if (e.target.classList.contains('l-discount')) e.target.closest('tr').dataset.discountEdited = 'true';
+  recalc();
+});
 tbody.addEventListener('change', e => {
   if (e.target.classList.contains('l-currency')) {
-    const exchange = e.target.closest('tr').querySelector('.l-exchange');
-    exchange.readOnly = e.target.value === 'ש"ח';
-    exchange.value = exchange.readOnly ? '1' : '';
+    setLineExchange(e.target.closest('tr'));
   }
   recalc();
 });
-$('discount').addEventListener('input', recalc);
+$('discount').addEventListener('input', () => {
+  for (const tr of tbody.rows) {
+    if (!tr.dataset.discountEdited) tr.querySelector('.l-discount').value = $('discount').value;
+  }
+  recalc();
+});
 $('invoiceType').addEventListener('change', () => {
   const rows = [...tbody.rows];
-  if (rows.length === 1 && ['', '14'].includes(rows[0].querySelector('.l-part').value) && !rows[0].querySelector('.l-grams').value && !rows[0].querySelector('.l-price').value && Number(rows[0].querySelector('.l-discount').value) === 0 && rows[0].querySelector('.l-currency').value === 'ש"ח') {
+  if (rows.length === 1 && ['', '14'].includes(rows[0].querySelector('.l-part').value) && Number(rows[0].querySelector('.l-grams').value) === 1 && !rows[0].querySelector('.l-price').value && !rows[0].dataset.discountEdited) {
     tbody.replaceChildren(); addLine();
   }
   recalc();
+});
+
+// בחירת סוג החשבונית שומרת את פרטי הטופס ומעדכנת רק שורה שטרם מולאה.
+$('typePicker').addEventListener('click', e => {
+  const choice = e.target.closest('button[data-type]');
+  if (!choice) return;
+  const changed = $('invoiceType').value !== choice.dataset.type;
+  const hasEnteredProducts = [...tbody.rows].some(tr => tr.querySelector('.l-price').value || Number(tr.querySelector('.l-grams').value) !== 1 || !['', '14'].includes(tr.querySelector('.l-part').value) || tr.dataset.discountEdited);
+  if (changed && hasEnteredProducts && !confirm('החלפת סוג החשבונית תנקה את המוצרים והמחירים כדי לבחור מק״טים מתאימים. פרטי הלקוח והחשבונית יישמרו. להמשיך?')) return;
+  if (changed && hasEnteredProducts) tbody.replaceChildren();
+  $('invoiceType').value = choice.dataset.type;
+  $('invoiceScreen').hidden = false;
+  $('typePicker').hidden = true;
+  if (changed) $('invoiceType').dispatchEvent(new Event('change'));
+  if (!tbody.rows.length) addLine();
+  const label = $('invoiceType').selectedOptions[0].textContent;
+  $('selectedTypeTitle').textContent = 'חשבונית ' + label;
+  $('selectedTypeNote').textContent = choice.dataset.type === '1'
+    ? 'החיפוש מציג מק״טים המסווגים כזהב בלבד. מק״ט 14 מוגדר כברירת מחדל.'
+    : 'החיפוש מציג רק מק״טים המתאימים לסוג החשבונית. המחיר והמטבע ממחירון הבסיס בפריוריטי.';
+  $('selectedTypeTitle').focus();
+  window.scrollTo(0, 0);
+});
+$('changeType').addEventListener('click', () => {
+  $('invoiceScreen').hidden = true;
+  $('typePicker').hidden = false;
+  $('typePicker').querySelector(`[data-type="${$('invoiceType').value}"]`).focus();
+  window.scrollTo(0, 0);
 });
 
 // ---------- השלמה אוטומטית של מק"ט (חיפוש ב-Priority תוך כדי הקלדה) ----------
@@ -498,7 +626,7 @@ function renderPartList(input, items, emptyMsg) {
   st.items = items; st.active = -1; partState.set(input, st);
   const list = partRow(input).querySelector('.part-list');
   list.innerHTML = items.length
-    ? items.map((p, i) => `<div data-i="${i}"><span class="code">${p.PARTNAME}</span><span>${p.PARTDES || ''} <span class="sub">${p.PUNITNAME || p.UNITNAME || ''}${p.EDEA_FEIN ? ' · ' + p.EDEA_FEIN : ''}</span></span></div>`).join('')
+    ? items.map((p, i) => `<div data-i="${i}"><span class="code">${escapeHtml(p.PARTNAME)}</span><span>${escapeHtml(p.PARTDES || '')} <span class="sub">${escapeHtml(p.PUNITNAME || p.UNITNAME || '')}${p.BASEPLPRICE > 0 && p.BASEPLCODE ? ' · ' + escapeHtml(p.BASEPLPRICE + ' ' + p.BASEPLCODE) : ' · אין מחיר בסיס זמין'}</span></span></div>`).join('')
     : `<div style="color:var(--muted);cursor:default">${emptyMsg}</div>`;
   list.hidden = false;
 }
@@ -514,31 +642,55 @@ function pickPart(input, i) {
   if (!p) return;
   const tr = partRow(input);
   input.value = p.PARTNAME;
+  tr.dataset.selectedPart = p.PARTNAME;
   const unit = p.PUNITNAME || p.UNITNAME || '';
   tr.querySelector('.l-desc').textContent = [p.PARTDES, p.FAMILYDES].filter(Boolean).join(' · ');
   tr.querySelector('.l-unit').textContent = unit || 'לפי המוצר';
-  // LASTPRICE has no currency context here; price must be entered explicitly.
+  applyPartPrice(tr, p);
   hidePartList(input);
   recalc();
   tr.querySelector('.l-grams').focus();
+}
+
+function applyPartPrice(tr, p) {
+  const price = tr.querySelector('.l-price');
+  const currency = tr.querySelector('.l-currency');
+  const exchange = tr.querySelector('.l-exchange');
+  const supported = ['$', 'USD'].includes(p.BASEPLCODE);
+  price.value = supported && Number(p.BASEPLPRICE) > 0 ? p.BASEPLPRICE : '';
+  currency.value = supported ? p.BASEPLCODE : 'USD';
+  setLineExchange(tr);
+  price.title = price.value ? 'מחיר בדולרים ממחירון הבסיס בפריוריטי, לפני הנחות — נעול לעריכה' : 'חסר מחיר בסיס בדולרים בפריוריטי — יש לעדכן את מחירון המוצר';
+  exchange.placeholder = exchange.readOnly ? '' : 'שער לש״ח';
+  tr.querySelector('.l-desc').textContent += price.value
+    ? ' · מחירון בסיס: ' + p.BASEPLPRICE + ' ' + p.BASEPLCODE
+    : ' · חסר מחיר בסיס בדולרים — יש לעדכן בפריוריטי';
+  recalc();
 }
 
 tbody.addEventListener('input', e => {
   const input = e.target;
   if (!input.classList.contains('l-part')) return;
   const st = partState.get(input) || {};
+  st.items = []; st.active = -1;
   partState.set(input, st);
   clearTimeout(st.timer);
+  hidePartList(input);
+  partRow(input).querySelector('.l-price').value = '';
+  delete partRow(input).dataset.selectedPart;
   partRow(input).querySelector('.l-desc').textContent = '';
   partRow(input).querySelector('.l-unit').textContent = 'לפי המוצר';
+  recalc();
   const q = input.value.trim();
+  const searchType = $('invoiceType').value;
   if (!q) { hidePartList(input); return; }
   st.timer = setTimeout(async () => {
     try {
-      const data = await api('/api/parts?q=' + encodeURIComponent(q));
-      if (input.value.trim() !== q) return; // המשתמש המשיך להקליד
+      const data = await api('/api/parts?q=' + encodeURIComponent(q) + '&invoiceType=' + searchType);
+      if (!input.isConnected || input.value.trim() !== q || $('invoiceType').value !== searchType || partRow(input).dataset.selectedPart === q) return;
       renderPartList(input, data.value || [], 'לא נמצאו פריטים');
     } catch (err) {
+      if (!input.isConnected || input.value.trim() !== q || $('invoiceType').value !== searchType || partRow(input).dataset.selectedPart === q) return;
       renderPartList(input, [], err.message);
     }
   }, 250);
@@ -553,6 +705,11 @@ tbody.addEventListener('mousedown', e => {
 
 tbody.addEventListener('keydown', e => {
   const input = e.target;
+  if (e.key === 'Enter' && input.matches('input')) {
+    e.preventDefault();
+    if (!e.repeat) advanceScannedLine(input);
+    return;
+  }
   if (!input.classList.contains('l-part')) return;
   const list = partRow(input).querySelector('.part-list');
   if (list.hidden) return;
@@ -563,10 +720,45 @@ tbody.addEventListener('keydown', e => {
     st.active = e.key === 'ArrowDown' ? Math.min(st.active + 1, items.length - 1) : Math.max(st.active - 1, 0);
     items.forEach((el, i) => el.classList.toggle('active', i === st.active));
     items[st.active]?.scrollIntoView({ block: 'nearest' });
-  } else if (e.key === 'Enter' && st.active >= 0) {
-    e.preventDefault(); pickPart(input, st.active);
   } else if (e.key === 'Escape') hidePartList(input);
 });
+
+async function advanceScannedLine(input) {
+  const tr = input.closest('tr');
+  if (tr.dataset.scanBusy) return;
+  const partInput = tr.querySelector('.l-part');
+  const term = partInput.value.trim();
+  if (!term) { partInput.focus(); return; }
+  const type = $('invoiceType').value;
+  tr.dataset.scanBusy = 'true';
+  try {
+    if (tr.dataset.selectedPart !== term) {
+      const st = partState.get(partInput);
+      clearTimeout(st?.timer);
+      const highlighted = input === partInput && st?.active >= 0 && !tr.querySelector('.part-list').hidden;
+      if (highlighted) pickPart(partInput, st.active);
+      else {
+        const data = await api('/api/parts?q=' + encodeURIComponent(term) + '&invoiceType=' + type + '&exact=1');
+        if (!tr.isConnected || partInput.value.trim() !== term || $('invoiceType').value !== type) return;
+        const matches = data.value || [];
+        const exact = matches.find(p => p.PARTNAME === term) || (matches.length === 1 ? matches[0] : null);
+        if (!exact) {
+          renderPartList(partInput, matches, 'לא נמצא מק״ט או ברקוד מתאים לסוג החשבונית');
+          showMsg('err', matches.length ? 'נמצאו מספר מוצרים לברקוד. יש לבחור מוצר מהרשימה.' : 'לא נמצא מוצר מתאים למק״ט או לברקוד שנסרק.');
+          partInput.focus(); return;
+        }
+        renderPartList(partInput, [exact], ''); pickPart(partInput, 0);
+      }
+    }
+    if (!Number(tr.querySelector('.l-price').value)) { showMsg('err', 'למוצר שנסרק חסר מחיר בסיס בדולרים בפריוריטי.'); partInput.focus(); return; }
+    hidePartList(partInput);
+    const next = tr.nextElementSibling || addLine();
+    const nextInput = next.querySelector('.l-part');
+    nextInput.focus(); nextInput.select();
+  } catch (err) {
+    if (tr.isConnected) { showMsg('err', 'חיפוש המוצר שנסרק נכשל: ' + escapeHtml(err.message)); partInput.focus(); }
+  } finally { delete tr.dataset.scanBusy; }
+}
 
 tbody.addEventListener('focusout', e => {
   if (e.target.classList.contains('l-part')) setTimeout(() => hidePartList(e.target), 150);
@@ -589,12 +781,13 @@ function recalc() {
     const t = InvoiceCalculations.lineTotal(lines[i]);
     tr.querySelector('.l-total').textContent = t === null ? 'חסר שער' : t ? fmt(t) : '—';
   });
-  const totals = InvoiceCalculations.totals(lines, Number($('discount').value), VAT_RATE);
+  const totals = InvoiceCalculations.totals(lines, 0, VAT_RATE);
   $('tBefore').textContent = totals ? fmt(totals.beforeVat) : '—';
   $('tVat').textContent = totals ? fmt(totals.vat) : '—';
   $('tTotal').textContent = totals ? fmt(totals.total) : '—';
 }
 addLine();
+loadExchangeRates();
 
 // ---------- שליחה ----------
 const msg = $('msg');
@@ -604,6 +797,16 @@ $('form').addEventListener('submit', async e => {
   e.preventDefault();
   msg.className = 'msg';
   const btn = $('submit');
+  const lines = readLines();
+  const missingPrice = lines.findIndex(line => !Number.isFinite(line.price) || line.price <= 0);
+  if (missingPrice !== -1) {
+    showMsg('err', `בשורה ${missingPrice + 1} חסר מחיר בסיס בדולרים. יש לבחור מוצר עם מחיר תקין בפריוריטי.`);
+    return;
+  }
+  if (lines.some(line => !Number.isFinite(Number(line.exchange)) || Number(line.exchange) <= 0)) {
+    showMsg('err', 'לא נטען שער דולר תקין לתאריך החשבונית. יש להמתין לטעינת השער או לרענן את הממשק.');
+    return;
+  }
 
   // אם לא נבחר לקוח מהרשימה אבל הוקלד מספר — משתמשים בו ישירות
   if (!$('custname').value && /^\d+$/.test(custSearch.value.trim())) {
@@ -641,8 +844,8 @@ $('form').addEventListener('submit', async e => {
         location: $('location').value.trim(),
         agent: $('agent').value.trim(),
         booknum: $('booknum').value.trim(),
-        discount: $('discount').value,
-        lines: readLines(),
+        discount: 0,
+        lines,
       }),
     });
     showMsg('ok',

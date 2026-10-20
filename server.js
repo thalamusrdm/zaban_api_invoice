@@ -6,6 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { buildInvoicePayload, INVOICE_TYPES, CURRENCIES } = require('./invoice-payload');
+const { exchangeQuery, exchangeResult } = require('./exchange-rates');
 let sdk; // נטען אחרי קריאת .env (ראו למטה)
 
 // ---------- טעינת .env ----------
@@ -22,7 +23,7 @@ const BASE_URL = process.env.PRIORITY_BASE_URL;
 const COMPANY = process.env.PRIORITY_COMPANY;
 const USER = process.env.PRIORITY_USER;
 const PASSWORD = process.env.PRIORITY_PASSWORD;
-const PORT = Number(process.env.PORT || 3600);
+const PORT = Number(process.env.PORT || 18473);
 const TIMEOUT_MS = 30000;
 
 if (!BASE_URL || !COMPANY || !USER || !PASSWORD || PASSWORD.startsWith('*')) {
@@ -88,7 +89,31 @@ async function priority(method, pathAndQuery, body) {
 const odataStr = s => String(s).replace(/'/g, "''");
 
 // ---------- Handlers ----------
+const exchangeRateCache = new Map();
 const handlers = {
+  'GET /api/exchange-rates': async q => {
+    const date = q.get('date');
+    const query = exchangeQuery(date);
+    const cached = exchangeRateCache.get(date);
+    if (cached && cached.expires > Date.now()) return cached.promise;
+    const promise = (async () => {
+    try {
+      const response = await fetch(query, { headers: { Accept: 'text/csv' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!response.ok) throw new Error(`בנק ישראל החזיר שגיאה (${response.status})`);
+      const result = exchangeResult(await response.text(), date);
+      log({ method: 'GET', source: 'bank-of-israel', date, rate: result.rates.USD.rate, rateDate: result.rates.USD.rateDate });
+      return result;
+    } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') err.message = 'תם הזמן לטעינת שער הדולר מבנק ישראל';
+      else if (err.message === 'fetch failed') err.message = 'לא ניתן להתחבר לבנק ישראל לטעינת שער הדולר';
+      err.status = 502;
+      throw err;
+    }
+    })();
+    exchangeRateCache.set(date, { promise, expires: Date.now() + 10 * 60 * 1000 });
+    promise.catch(() => { if (exchangeRateCache.get(date)?.promise === promise) exchangeRateCache.delete(date); });
+    return promise;
+  },
   // Suggestions contain codes/descriptions only, never customer or invoice data.
   'GET /api/invoices/options': async () => {
     if (invoiceOptionsCache && Date.now() - invoiceOptionsCache.ts < 10 * 60 * 1000) return invoiceOptionsCache.data;
@@ -118,11 +143,16 @@ const handlers = {
   'GET /api/parts': async (q) => {
     const term = (q.get('q') || '').trim();
     if (term.length < 1) return { value: [] };
+    const invoiceType = q.get('invoiceType');
+    if (!INVOICE_TYPES.some(x => x.code === invoiceType)) throw badRequest('יש לבחור סוג חשבונית לחיפוש מק״ט');
     const t = odataStr(term);
-    const sel = 'PARTNAME,PARTDES,PUNITNAME,UNITNAME,LASTPRICE,MINPRICE,EDEA_FEIN,FAMILYDES';
-    const get = f => priority('GET', `LOGPART?$select=${sel}&$top=15&$filter=${encodeURIComponent(`${f} and STATDES eq 'פעיל'`)}`);
+    const sel = 'PARTNAME,BARCODE,PARTDES,PUNITNAME,UNITNAME,BASEPLPRICE,BASEPLCODE,EDEA_PARTTYPE,EDEA_FEIN,FAMILYDES';
+    const get = f => priority('GET', `LOGPART?$select=${sel}&$top=15&$filter=${encodeURIComponent(`(${f}) and STATDES eq 'פעיל' and EDEA_PARTTYPE eq '${invoiceType}'`)}`);
+    if (q.get('exact') === '1') {
+      return get(`PARTNAME eq '${t}' or BARCODE eq '${t}'`);
+    }
     // שתי שאילתות במקביל: התאמה לפי מק"ט (קודם) ואז לפי תיאור — כך "14" מחזיר קודם את המק"ט 14 עצמו
-    const [byCode, byDesc] = await Promise.all([get(`PARTNAME eq '${t}*'`), get(`PARTDES eq '*${t}*'`)]);
+    const [byCode, byDesc] = await Promise.all([get(`PARTNAME eq '${t}*' or BARCODE eq '${t}'`), get(`PARTDES eq '*${t}*'`)]);
     const seen = new Set();
     const value = [];
     for (const p of [...(byCode.value || []), ...(byDesc.value || [])]) {

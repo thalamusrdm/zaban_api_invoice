@@ -7,7 +7,7 @@ const { Readable } = require('node:stream');
 const path = require('node:path');
 
 // The real HTTP handler runs with a fake Priority transport and no filesystem writes.
-function isolatedServer() {
+function isolatedServer(getResponse, responseStatus = 200) {
   let handler;
   const calls = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8'), {
@@ -17,16 +17,17 @@ function isolatedServer() {
       if (name === 'fs') return { existsSync: () => false, appendFile() {} };
       if (name === './priority-sdk') return {};
       if (name === './invoice-payload') return require('../invoice-payload');
+      if (name === './exchange-rates') return require('../exchange-rates');
       return require(name);
     },
     process: { env: { PRIORITY_BASE_URL: 'http://priority.invalid/odata/config', PRIORITY_COMPANY: 'test-only', PRIORITY_USER: 'fake-user', PRIORITY_PASSWORD: 'fake-password' } },
     console: { log() {}, error() {} }, Buffer, URL, AbortSignal,
     async fetch(url, options) {
-      calls.push({ url, method: options.method, body: options.body && JSON.parse(options.body) });
-      const response = options.method === 'POST'
+      calls.push({ url, method: options.method || 'GET', headers: options.headers, body: options.body && JSON.parse(options.body) });
+      const response = getResponse ? getResponse(url, options) : options.method === 'POST'
         ? { IVNUM: 'T-FAKE', STATDES: 'טיוטא', QPRICE: 100, VAT: 18, TOTPRICE: 118 }
         : { value: [{ WARHSNAME: 'TEST-W', WARHSDES: 'Test warehouse', AGENTCODE: 'TEST-A', AGENTNAME: 'Test agent', CUSTNAME: 'must-not-leak', IVNUM: 'must-not-leak' }] };
-      return { ok: true, status: 200, text: async () => JSON.stringify(response) };
+      return { ok: responseStatus < 400, status: responseStatus, text: async () => typeof response === 'string' ? response : JSON.stringify(response) };
     },
   });
   return {
@@ -79,4 +80,69 @@ test('suggestions use GET, strip invoice/customer data, and cache results', asyn
   assert.equal(first.body.warehouses[0].code, 'TEST-W');
   assert.equal(first.body.agents[0].code, 'TEST-A');
   assert.equal(JSON.stringify(first.body).includes('must-not-leak'), false);
+});
+
+test('part search applies the selected classification before the result limit', async () => {
+  for (const type of ['1', '2', '4']) {
+    const server = isolatedServer();
+    const result = await server.request('GET', `/api/parts?q=ring&invoiceType=${type}`);
+    assert.equal(result.status, 200);
+    assert.equal(server.calls.length, 2);
+    for (const call of server.calls) {
+      const url = new URL(call.url);
+      assert.equal(call.method, 'GET');
+      assert.ok(url.searchParams.get('$filter').includes(`EDEA_PARTTYPE eq '${type}'`));
+      assert.ok(url.searchParams.get('$filter').includes("STATDES eq 'פעיל'"));
+      assert.ok(url.searchParams.get('$select').includes('BASEPLPRICE,BASEPLCODE'));
+    }
+  }
+});
+
+test('missing or invalid invoice classification cannot trigger an unfiltered part search', async () => {
+  for (const type of ['', '3', "4' or 1 eq 1"]) {
+    const server = isolatedServer();
+    const result = await server.request('GET', '/api/parts?q=ring&invoiceType=' + encodeURIComponent(type));
+    assert.equal(result.status, 400);
+    assert.equal(server.calls.length, 0);
+  }
+});
+
+test('one public BOI request retrieves both dollar codes without Priority credentials', async () => {
+  const server = isolatedServer(() => 'SERIES_CODE,BASE_CURRENCY,COUNTER_CURRENCY,DATA_TYPE,UNIT_MULT,TIME_PERIOD,OBS_VALUE\nRER_USD_ILS,USD,ILS,OF00,0,2026-10-19,3.11\n');
+  const result = await server.request('GET', '/api/exchange-rates?date=2026-10-20');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.rates.USD.rate, 3.11);
+  assert.equal(result.body.rates.$.rate, 3.11);
+  assert.equal(server.calls.length, 1);
+  assert.equal(server.calls[0].method, 'GET');
+  assert.equal(new URL(server.calls[0].url).hostname, 'edge.boi.gov.il');
+  assert.equal(server.calls[0].headers.Authorization, undefined);
+  const cached = await server.request('GET', '/api/exchange-rates?date=2026-10-20');
+  assert.equal(cached.body.rates.USD.rate, 3.11);
+  assert.equal(server.calls.length, 1);
+  const invalid = await server.request('GET', '/api/exchange-rates?date=2026-02-30');
+  assert.equal(invalid.status, 400);
+  assert.equal(server.calls.length, 1);
+});
+
+test('BOI errors are reported without falling back to Priority or a guessed rate', async () => {
+  const server = isolatedServer(() => 'service unavailable', 503);
+  const result = await server.request('GET', '/api/exchange-rates?date=2026-10-20');
+  assert.equal(result.status, 502);
+  assert.match(result.body.error, /בנק ישראל.*503/);
+  assert.equal(server.calls.length, 1);
+});
+
+test('scanner lookup uses exact part/barcode matching, type and active status in one GET', async () => {
+  const server = isolatedServer(() => ({ value: [{ PARTNAME: 'REAL-PART', BARCODE: '7290000000001', BASEPLPRICE: 100, BASEPLCODE: 'USD' }] }));
+  const result = await server.request('GET', '/api/parts?q=7290000000001&invoiceType=4&exact=1');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.value[0].PARTNAME, 'REAL-PART');
+  assert.equal(server.calls.length, 1);
+  assert.equal(server.calls[0].method, 'GET');
+  const filter = new URL(server.calls[0].url).searchParams.get('$filter');
+  assert.ok(filter.includes("PARTNAME eq '7290000000001' or BARCODE eq '7290000000001'"));
+  assert.ok(filter.includes("EDEA_PARTTYPE eq '4'"));
+  assert.ok(filter.includes("STATDES eq 'פעיל'"));
+  assert.equal(filter.includes('*'), false);
 });
