@@ -12,6 +12,7 @@ function exchangeUI(api) {
     date: { value: '2026-10-20', validity: { valid: true }, addEventListener() {} },
     exchangeStatus: { textContent: '' },
     useBoiRates: { checked: true, addEventListener() {} },
+    invoiceType: { value: '2', addEventListener() {} },
   };
   const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
   const block = html.slice(html.indexOf("const tbody = $('lines')"), html.indexOf('function addLine('));

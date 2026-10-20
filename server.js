@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { buildInvoicePayload, INVOICE_TYPES, CURRENCIES } = require('./invoice-payload');
 const { exchangeQuery, exchangeResult, priorityExchangeResult } = require('./exchange-rates');
+const { goldCutoff, goldResult } = require('./gold-rates');
 let sdk; // נטען אחרי קריאת .env (ראו למטה)
 
 // ---------- טעינת .env ----------
@@ -90,7 +91,22 @@ const odataStr = s => String(s).replace(/'/g, "''");
 
 // ---------- Handlers ----------
 const exchangeRateCache = new Map();
+const goldPriceCache = new Map();
 const handlers = {
+  'GET /api/gold-prices': async q => {
+    const date = q.get('date');
+    const cutoff = goldCutoff(date);
+    const cached = goldPriceCache.get(date);
+    if (cached && cached.expires > Date.now()) return cached.promise;
+    const promise = (async () => {
+      const result = goldResult(await sdk.getGoldPrices(cutoff), date, cutoff);
+      log({ method: 'GET', source: 'priority-gold', date, updatedAt: result.updatedAt });
+      return result;
+    })();
+    goldPriceCache.set(date, { promise, expires: Date.now() + 10 * 60 * 1000 });
+    promise.catch(() => { if (goldPriceCache.get(date)?.promise === promise) goldPriceCache.delete(date); });
+    return promise;
+  },
   'GET /api/exchange-rates': async q => {
     const date = q.get('date');
     const source = q.get('source') || 'boi';

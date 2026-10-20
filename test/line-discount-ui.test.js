@@ -18,7 +18,8 @@ test('default discounts seed unedited rows; overrides calculate from full price 
   }
   const first = row('0'), second = row('0');
   const tbody = { rows: [first, second], addEventListener(type, fn) { listeners[type] = fn; } };
-  const handlers = html.slice(html.indexOf("tbody.addEventListener('input', e => {"), html.indexOf("$('invoiceType').addEventListener('change'"));
+  const handlersStart = html.indexOf("tbody.addEventListener('input', e => {");
+  const handlers = html.slice(handlersStart, html.indexOf("$('invoiceType').addEventListener('change'", handlersStart));
   const calculations = html.slice(html.indexOf('function readLines()'), html.indexOf('\naddLine();\nloadExchangeRates();'));
   vm.runInNewContext(calculations + '\n' + handlers, { tbody, $: id => elements[id], InvoiceCalculations, VAT_RATE: 0.18, fmt: n => n, setLineExchange() {} });
   listeners.defaultInput();

@@ -249,7 +249,8 @@
     </div>
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
     <h2 class="section-caption">פירוט החשבונית</h2>
-    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה, ממחירון הבסיס בפריוריטי. שער הדולר מתמלא לפי המקור שנבחר. המחיר והשער נעולים לעריכה.</p>
+    <p class="field-note" id="goldStatus" role="status" hidden></p>
+    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה: למק״טי זהב 14, 18 ו־F מלוג מחירי הזהב, ולשאר המוצרים ממחירון הבסיס. שער הדולר מתמלא לפי המקור שנבחר. המחיר והשער נעולים לעריכה.</p>
     <div class="table-scroll" role="region" aria-label="שורות החשבונית" tabindex="0">
     <table id="lines">
       <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col">מחיר ($)</th><th scope="col" hidden>מטבע מחיר</th><th scope="col">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
@@ -537,6 +538,50 @@ async function loadExchangeRates() {
 $('date').addEventListener('change', loadExchangeRates);
 $('useBoiRates').addEventListener('change', loadExchangeRates);
 
+// Gold prices are a separate Priority quote; the checkbox only selects USD/ILS FX.
+const goldRequests = new Map();
+let currentGoldPrices = null;
+const isGoldPart = part => ['14', '18', 'F'].includes(part);
+
+function setGoldLinePrice(tr) {
+  const part = tr.dataset.goldPart;
+  if (!part) return;
+  const info = currentGoldPrices?.date === $('date').value ? currentGoldPrices.prices[part] : null;
+  const price = tr.querySelector('.l-price');
+  price.value = info?.price ?? '';
+  price.title = info ? `מחיר לגרם מלוג מחירי זהב בפריוריטי · ${currentGoldPrices.updatedAt} · נעול לעריכה` : 'ממתינים למחיר זהב מפריוריטי';
+  tr.querySelector('.l-currency').value = info?.currency || '$';
+  tr.querySelector('.l-desc').textContent = (tr.dataset.partDescription || part) + (info ? ` · לוג זהב: ${info.price} $ לגרם` : ' · ממתינים למחיר זהב');
+  setLineExchange(tr);
+}
+
+async function loadGoldPrices() {
+  const status = $('goldStatus');
+  status.hidden = $('invoiceType').value !== '1';
+  if (status.hidden) return;
+  const date = $('date').value;
+  currentGoldPrices = null;
+  for (const tr of tbody.rows) setGoldLinePrice(tr);
+  recalc();
+  if (!date || !$('date').validity.valid) { status.textContent = 'יש לבחור תאריך תקין לטעינת מחיר הזהב.'; return; }
+  status.textContent = 'טוען מחיר לגרם מלוג מחירי זהב בפריוריטי…';
+  if (!goldRequests.has(date)) goldRequests.set(date, api('/api/gold-prices?date=' + encodeURIComponent(date)));
+  try {
+    const data = await goldRequests.get(date);
+    if ($('date').value !== date || $('invoiceType').value !== '1') return;
+    currentGoldPrices = data;
+    const stamp = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.updatedAt));
+    status.textContent = `זהב מפריוריטי · עדכון ${stamp} · ` + Object.entries(data.prices).map(([part, info]) => `${part}: ${info.price} $ לגרם`).join(' | ') + ' · נטען פעם אחת לתאריך החשבונית; תיבת בנק ישראל בוחרת את שער הדולר בלבד.';
+  } catch (err) {
+    if ($('date').value !== date || $('invoiceType').value !== '1') return;
+    status.textContent = 'מחיר הזהב אינו זמין: ' + err.message;
+  }
+  for (const tr of tbody.rows) setGoldLinePrice(tr);
+  recalc();
+}
+$('date').addEventListener('change', loadGoldPrices);
+$('invoiceType').addEventListener('change', loadGoldPrices);
+
 function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = '1', price = '') {
   const tr = document.createElement('tr');
   tr.innerHTML = `
@@ -613,7 +658,7 @@ $('typePicker').addEventListener('click', e => {
   const label = $('invoiceType').selectedOptions[0].textContent;
   $('selectedTypeTitle').textContent = 'חשבונית ' + label;
   $('selectedTypeNote').textContent = choice.dataset.type === '1'
-    ? 'החיפוש מציג מק״טים המסווגים כזהב בלבד. מק״ט 14 מוגדר כברירת מחדל.'
+    ? 'מק״טים 14, 18 ו־F: מחיר לגרם מלוג מחירי הזהב בפריוריטי לפי תאריך החשבונית. מק״ט 14 מוגדר כברירת מחדל.'
     : 'החיפוש מציג רק מק״טים המתאימים לסוג החשבונית. המחיר והמטבע ממחירון הבסיס בפריוריטי.';
   $('selectedTypeTitle').focus();
   window.scrollTo(0, 0);
@@ -635,7 +680,7 @@ function renderPartList(input, items, emptyMsg) {
   st.items = items; st.active = -1; partState.set(input, st);
   const list = partRow(input).querySelector('.part-list');
   list.innerHTML = items.length
-    ? items.map((p, i) => `<div data-i="${i}"><span class="code">${escapeHtml(p.PARTNAME)}</span><span>${escapeHtml(p.PARTDES || '')} <span class="sub">${escapeHtml(p.PUNITNAME || p.UNITNAME || '')}${p.BASEPLPRICE > 0 && p.BASEPLCODE ? ' · ' + escapeHtml(p.BASEPLPRICE + ' ' + p.BASEPLCODE) : ' · אין מחיר בסיס זמין'}</span></span></div>`).join('')
+    ? items.map((p, i) => `<div data-i="${i}"><span class="code">${escapeHtml(p.PARTNAME)}</span><span>${escapeHtml(p.PARTDES || '')} <span class="sub">${escapeHtml(p.PUNITNAME || p.UNITNAME || '')}${$('invoiceType').value === '1' && isGoldPart(p.PARTNAME) ? ' · מחיר מלוג הזהב' : p.BASEPLPRICE > 0 && p.BASEPLCODE ? ' · ' + escapeHtml(p.BASEPLPRICE + ' ' + p.BASEPLCODE) : ' · אין מחיר בסיס זמין'}</span></span></div>`).join('')
     : `<div style="color:var(--muted);cursor:default">${emptyMsg}</div>`;
   list.hidden = false;
 }
@@ -665,6 +710,14 @@ function applyPartPrice(tr, p) {
   const price = tr.querySelector('.l-price');
   const currency = tr.querySelector('.l-currency');
   const exchange = tr.querySelector('.l-exchange');
+  delete tr.dataset.goldPart;
+  if ($('invoiceType').value === '1' && isGoldPart(p.PARTNAME)) {
+    tr.dataset.goldPart = p.PARTNAME;
+    tr.dataset.partDescription = [p.PARTDES, p.FAMILYDES].filter(Boolean).join(' · ');
+    tr.querySelector('.l-unit').textContent = 'גרם';
+    setGoldLinePrice(tr);
+    recalc(); return;
+  }
   const supported = ['$', 'USD'].includes(p.BASEPLCODE);
   price.value = supported && Number(p.BASEPLPRICE) > 0 ? p.BASEPLPRICE : '';
   currency.value = supported ? p.BASEPLCODE : 'USD';
@@ -686,6 +739,7 @@ tbody.addEventListener('input', e => {
   clearTimeout(st.timer);
   hidePartList(input);
   partRow(input).querySelector('.l-price').value = '';
+  delete partRow(input).dataset.goldPart;
   delete partRow(input).dataset.selectedPart;
   partRow(input).querySelector('.l-desc').textContent = '';
   partRow(input).querySelector('.l-unit').textContent = 'לפי המוצר';
@@ -759,7 +813,9 @@ async function advanceScannedLine(input) {
         renderPartList(partInput, [exact], ''); pickPart(partInput, 0);
       }
     }
-    if (!Number(tr.querySelector('.l-price').value)) { showMsg('err', 'למוצר שנסרק חסר מחיר בסיס בדולרים בפריוריטי.'); partInput.focus(); return; }
+    if (tr.dataset.goldPart && !currentGoldPrices) await loadGoldPrices();
+    if (!tr.isConnected || $('invoiceType').value !== type) return;
+    if (!Number(tr.querySelector('.l-price').value)) { showMsg('err', tr.dataset.goldPart ? 'טרם נטען מחיר זהב תקין מפריוריטי לתאריך החשבונית.' : 'למוצר שנסרק חסר מחיר בסיס בדולרים בפריוריטי.'); partInput.focus(); return; }
     hidePartList(partInput);
     const next = tr.nextElementSibling || addLine();
     const nextInput = next.querySelector('.l-part');
@@ -797,6 +853,7 @@ function recalc() {
 }
 addLine();
 loadExchangeRates();
+loadGoldPrices();
 
 // ---------- שליחה ----------
 const msg = $('msg');
@@ -809,7 +866,7 @@ $('form').addEventListener('submit', async e => {
   const lines = readLines();
   const missingPrice = lines.findIndex(line => !Number.isFinite(line.price) || line.price <= 0);
   if (missingPrice !== -1) {
-    showMsg('err', `בשורה ${missingPrice + 1} חסר מחיר בסיס בדולרים. יש לבחור מוצר עם מחיר תקין בפריוריטי.`);
+    showMsg('err', `בשורה ${missingPrice + 1} חסר מחיר בדולרים. יש להמתין לטעינה ולבחור מוצר עם מחיר תקין בפריוריטי.`);
     return;
   }
   if (lines.some(line => !Number.isFinite(Number(line.exchange)) || Number(line.exchange) <= 0)) {

@@ -18,6 +18,7 @@ function isolatedServer(getResponse, responseStatus = 200, sdk = {}) {
       if (name === './priority-sdk') return sdk;
       if (name === './invoice-payload') return require('../invoice-payload');
       if (name === './exchange-rates') return require('../exchange-rates');
+      if (name === './gold-rates') return require('../gold-rates');
       return require(name);
     },
     process: { env: { PRIORITY_BASE_URL: 'http://priority.invalid/odata/config', PRIORITY_COMPANY: 'test-only', PRIORITY_USER: 'fake-user', PRIORITY_PASSWORD: 'fake-password' } },
@@ -42,6 +43,30 @@ function isolatedServer(getResponse, responseStatus = 200, sdk = {}) {
     },
   };
 }
+
+test('gold route validates date, shares one SDK quote across concurrent calls and caches by date', async () => {
+  let calls = 0;
+  const server = isolatedServer(null, 200, { async getGoldPrices(cutoff) {
+    calls++; assert.ok(Number.isFinite(Date.parse(cutoff)));
+    return [{ UDATE: '2026-10-19T15:44:00+03:00', USDPRICE: '78.355698896', USDPRICE2: '100.456024226', USDPRICE3: '132.482598287' }];
+  } });
+  const bad = await server.request('GET', '/api/gold-prices?date=2026-02-30');
+  assert.equal(bad.status, 400); assert.equal(calls, 0);
+  const results = await Promise.all([server.request('GET', '/api/gold-prices?date=2026-10-20'), server.request('GET', '/api/gold-prices?date=2026-10-20')]);
+  assert.equal(results[0].status, 200); assert.deepEqual(results[0], results[1]);
+  assert.equal(results[0].body.prices['14'].price, 78.36); assert.equal(calls, 1);
+  await server.request('GET', '/api/gold-prices?date=2026-10-19'); assert.equal(calls, 2);
+  assert.equal(server.calls.length, 0);
+});
+
+test('failed gold SDK loading has no price fallback and can be retried', async () => {
+  let calls = 0;
+  const server = isolatedServer(null, 200, { async getGoldPrices() { calls++; throw new Error('gold offline'); } });
+  const first = await server.request('GET', '/api/gold-prices?date=2026-10-20');
+  assert.ok(first.status >= 500); assert.match(first.body.error, /gold offline/);
+  await server.request('GET', '/api/gold-prices?date=2026-10-20');
+  assert.equal(calls, 2); assert.equal(server.calls.length, 0);
+});
 
 test('HTTP route sends selected fields to the isolated Priority transport', async () => {
   const server = isolatedServer();

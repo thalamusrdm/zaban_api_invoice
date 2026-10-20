@@ -251,4 +251,18 @@ async function getCurrencyRates(date) {
   return result;
 }
 
-module.exports = { closeInvoice, getInvoiceDocumentUrl, getCurrencyRates };
+async function getGoldPrices(cutoff) {
+  await withTimeout(ensureLogin(), 'login for gold prices');
+  let form, messageError;
+  try {
+    form = await withTimeout(priority.formStart('FZAB_GOLDPRICE', msg => { messageError = new Error(errText(msg)); }, () => {}, undefined, 0), 'gold price form');
+    await withTimeout(form.setSearchFilter({ or: 0, ignorecase: 1, QueryValues: [{ field: 'UDATE', fromval: cutoff, toval: '', op: '<=', sort: 1, isdesc: 1 }] }), 'gold price filter');
+    const rows = await withTimeout(form.getRows(1), 'gold price rows');
+    if (messageError) throw messageError;
+    return Object.values(rows?.FZAB_GOLDPRICE || {}).map(({ UDATE, USDPRICE, USDPRICE2, USDPRICE3 }) => ({ UDATE, USDPRICE, USDPRICE2, USDPRICE3 }));
+  } finally {
+    if (form) try { await withTimeout(form.endCurrentForm(), 'close gold price form', 5000); } catch {}
+  }
+}
+
+module.exports = { closeInvoice, getInvoiceDocumentUrl, getCurrencyRates, getGoldPrices };
