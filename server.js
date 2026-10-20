@@ -6,7 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { buildInvoicePayload, INVOICE_TYPES, CURRENCIES } = require('./invoice-payload');
-const { exchangeQuery, exchangeResult } = require('./exchange-rates');
+const { exchangeQuery, exchangeResult, priorityExchangeResult } = require('./exchange-rates');
 let sdk; // נטען אחרי קריאת .env (ראו למטה)
 
 // ---------- טעינת .env ----------
@@ -93,25 +93,34 @@ const exchangeRateCache = new Map();
 const handlers = {
   'GET /api/exchange-rates': async q => {
     const date = q.get('date');
+    const source = q.get('source') || 'boi';
+    if (!['boi', 'priority'].includes(source)) throw badRequest('מקור שער לא תקין');
     const query = exchangeQuery(date);
-    const cached = exchangeRateCache.get(date);
+    const cacheKey = `${source}:${date}`;
+    const cached = exchangeRateCache.get(cacheKey);
     if (cached && cached.expires > Date.now()) return cached.promise;
     const promise = (async () => {
     try {
+      if (source === 'priority') {
+        const result = priorityExchangeResult(await sdk.getCurrencyRates(date), date);
+        log({ method: 'GET', source: 'priority', date, rates: result.rates });
+        return result;
+      }
       const response = await fetch(query, { headers: { Accept: 'text/csv' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (!response.ok) throw new Error(`בנק ישראל החזיר שגיאה (${response.status})`);
       const result = exchangeResult(await response.text(), date);
       log({ method: 'GET', source: 'bank-of-israel', date, rate: result.rates.USD.rate, rateDate: result.rates.USD.rateDate });
       return result;
     } catch (err) {
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') err.message = 'תם הזמן לטעינת שער הדולר מבנק ישראל';
-      else if (err.message === 'fetch failed') err.message = 'לא ניתן להתחבר לבנק ישראל לטעינת שער הדולר';
+      const sourceName = source === 'priority' ? 'פריוריטי' : 'בנק ישראל';
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') err.message = 'תם הזמן לטעינת שער הדולר מ' + sourceName;
+      else if (err.message === 'fetch failed') err.message = 'לא ניתן להתחבר ל' + sourceName + ' לטעינת שער הדולר';
       err.status = 502;
       throw err;
     }
     })();
-    exchangeRateCache.set(date, { promise, expires: Date.now() + 10 * 60 * 1000 });
-    promise.catch(() => { if (exchangeRateCache.get(date)?.promise === promise) exchangeRateCache.delete(date); });
+    exchangeRateCache.set(cacheKey, { promise, expires: Date.now() + 10 * 60 * 1000 });
+    promise.catch(() => { if (exchangeRateCache.get(cacheKey)?.promise === promise) exchangeRateCache.delete(cacheKey); });
     return promise;
   },
   // Suggestions contain codes/descriptions only, never customer or invoice data.

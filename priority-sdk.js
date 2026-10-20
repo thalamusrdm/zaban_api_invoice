@@ -222,4 +222,33 @@ async function getInvoiceDocumentUrl(ivnum, log) {
 
 const PRINT_PROC = process.env.PRIORITY_PRINT_PROC || 'WWWSHOWAIV';
 
-module.exports = { closeInvoice, getInvoiceDocumentUrl };
+// Read-only access works through Web SDK even when the OData form is not enabled.
+async function getCurrencyRates(date) {
+  await withTimeout(ensureLogin(), 'login for currency rates');
+  const result = [];
+  for (const code of ['USD', '$']) {
+    let form, history;
+    let messageError;
+    const onMessage = msg => { messageError = new Error(errText(msg)); };
+    try {
+      form = await withTimeout(priority.formStart('CURRENCIES', onMessage, () => {}, undefined, 0), 'currency form');
+      await withTimeout(form.setSearchFilter({ or: 0, ignorecase: 1, QueryValues: [{ field: 'CODE', fromval: code, toval: '', op: '=', sort: 0, isdesc: 0 }] }), 'currency filter');
+      const rows = await withTimeout(form.getRows(1), 'currency rows');
+      const row = rows?.CURRENCIES?.['1'];
+      if (!row || row.CODE !== code) continue;
+      await withTimeout(form.setActiveRow(1), 'currency active row');
+      history = await withTimeout(form.startSubForm('CURRHIS', onMessage, () => {}), 'currency history');
+      await withTimeout(history.setSearchFilter({ or: 0, ignorecase: 1, QueryValues: [{ field: 'CURDATE', fromval: date, toval: '', op: '<=', sort: 1, isdesc: 1 }] }), 'currency history filter');
+      const historical = await withTimeout(history.getRows(1), 'currency history rows');
+      if (messageError) throw messageError;
+      result.push({ CODE: row.CODE, EXCH: row.EXCH, EXCHDATE: row.EXCHDATE, EXCHQUANT: row.EXCHQUANT,
+        CURRHIS_SUBFORM: Object.values(historical?.CURRHIS || {}).map(x => ({ EXCH: x.EXCH, CURDATE: x.CURDATE, SDATE: x.SDATE })) });
+    } finally {
+      if (history) try { await withTimeout(history.endCurrentForm(), 'close currency history', 5000); } catch {}
+      if (form) try { await withTimeout(form.endCurrentForm(), 'close currency form', 5000); } catch {}
+    }
+  }
+  return result;
+}
+
+module.exports = { closeInvoice, getInvoiceDocumentUrl, getCurrencyRates };

@@ -228,6 +228,8 @@
       <div>
         <label for="date">תאריך חשבונית</label>
         <input type="date" id="date" required>
+        <label style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--text)"><input type="checkbox" id="useBoiRates" checked style="width:auto">השתמש בשער דולר מבנק ישראל</label>
+        <p class="field-note">ללא סימון: שער מפריוריטי לפי מטבע המוצר (USD או $).</p>
         <p class="field-note" id="exchangeStatus" role="status">טוען שער דולר מבנק ישראל…</p>
       </div>
     </div>
@@ -247,7 +249,7 @@
     </div>
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
     <h2 class="section-caption">פירוט החשבונית</h2>
-    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה, ממחירון הבסיס בפריוריטי. שער הדולר מתמלא מבנק ישראל. המחיר והשער נעולים לעריכה.</p>
+    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה, ממחירון הבסיס בפריוריטי. שער הדולר מתמלא לפי המקור שנבחר. המחיר והשער נעולים לעריכה.</p>
     <div class="table-scroll" role="region" aria-label="שורות החשבונית" tabindex="0">
     <table id="lines">
       <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col">מחיר ($)</th><th scope="col" hidden>מטבע מחיר</th><th scope="col">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
@@ -493,40 +495,47 @@ document.addEventListener('click', e => { if (!e.target.closest('.cust')) custLi
 const tbody = $('lines').querySelector('tbody');
 const exchangeRequests = new Map();
 let currentExchangeRates = null;
+const selectedRateSource = () => $('useBoiRates').checked ? 'boi' : 'priority';
 
 function setLineExchange(tr) {
   const currency = tr.querySelector('.l-currency').value;
   const exchange = tr.querySelector('.l-exchange');
-  const info = currentExchangeRates?.date === $('date').value ? currentExchangeRates.rates[currency] : null;
+  const expectedSource = selectedRateSource() === 'boi' ? 'bank-of-israel' : 'priority';
+  const info = currentExchangeRates?.date === $('date').value && currentExchangeRates.source === expectedSource ? currentExchangeRates.rates[currency] : null;
   exchange.readOnly = true;
   exchange.value = currency === 'ש"ח' ? '1' : info?.rate ?? '';
-  exchange.title = currency === 'ש"ח' ? 'מטבע מקומי — שער 1' : info ? `שער יציג מבנק ישראל ליום ${info.rateDate}` : 'ממתינים לשער מבנק ישראל — הפקת החשבונית תתאפשר לאחר טעינתו';
+  const label = selectedRateSource() === 'boi' ? 'בנק ישראל' : 'פריוריטי';
+  exchange.title = currency === 'ש"ח' ? 'מטבע מקומי — שער 1' : info ? `שער מ${label} ליום ${info.rateDate} (${currency})` : 'ממתינים לשער מ' + label + ' — הפקת החשבונית תתאפשר לאחר טעינתו';
   exchange.placeholder = 'שער לש״ח';
 }
 
 async function loadExchangeRates() {
   const date = $('date').value;
+  const source = selectedRateSource();
+  const cacheKey = `${source}:${date}`;
   currentExchangeRates = null;
   for (const tr of tbody.rows) setLineExchange(tr);
   recalc();
   if (!$('date').validity.valid || !date) { $('exchangeStatus').textContent = 'יש לבחור תאריך תקין לטעינת שער דולר.'; return; }
-  $('exchangeStatus').textContent = 'טוען שער דולר מבנק ישראל…';
-  if (!exchangeRequests.has(date)) exchangeRequests.set(date, api('/api/exchange-rates?date=' + encodeURIComponent(date)));
+  $('exchangeStatus').textContent = source === 'boi' ? 'טוען שער דולר מבנק ישראל…' : 'טוען שערי דולר מפריוריטי…';
+  if (!exchangeRequests.has(cacheKey)) exchangeRequests.set(cacheKey, api('/api/exchange-rates?date=' + encodeURIComponent(date) + '&source=' + source));
   try {
-    const data = await exchangeRequests.get(date);
-    if ($('date').value !== date) return;
+    const data = await exchangeRequests.get(cacheKey);
+    if ($('date').value !== date || selectedRateSource() !== source) return;
     currentExchangeRates = data;
     const info = data.rates.USD;
-    $('exchangeStatus').textContent = `שער דולר יציג — בנק ישראל: ${info.rate} ₪ · פורסם ב־${info.rateDate}`
-      + (info.rateDate < date ? ' · השער האחרון שפורסם עד תאריך החשבונית' : '');
+    $('exchangeStatus').textContent = source === 'boi'
+      ? `שער דולר יציג — בנק ישראל: ${info.rate} ₪ · פורסם ב־${info.rateDate}` + (info.rateDate < date ? ' · השער האחרון שפורסם עד תאריך החשבונית' : '')
+      : 'פריוריטי: ' + Object.entries(data.rates).map(([code, rate]) => `${code}: ${rate.rate} ₪ · תאריך ${rate.rateDate}`).join(' | ');
   } catch (err) {
-    if ($('date').value !== date) return;
+    if ($('date').value !== date || selectedRateSource() !== source) return;
     $('exchangeStatus').textContent = 'שער הדולר אינו זמין: ' + err.message + ' יש לטעון שער תקין לפני הפקת החשבונית.';
   }
   for (const tr of tbody.rows) setLineExchange(tr);
   recalc();
 }
 $('date').addEventListener('change', loadExchangeRates);
+$('useBoiRates').addEventListener('change', loadExchangeRates);
 
 function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = '1', price = '') {
   const tr = document.createElement('tr');

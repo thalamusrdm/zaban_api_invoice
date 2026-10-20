@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { exchangeQuery, exchangeResult } = require('../exchange-rates');
+const { exchangeQuery, exchangeResult, priorityExchangeResult } = require('../exchange-rates');
 const header = 'SERIES_CODE,BASE_CURRENCY,COUNTER_CURRENCY,DATA_TYPE,UNIT_MULT,COMMENTS,TIME_PERIOD,OBS_VALUE';
 const row = (date, rate, type = 'OF00') => `RER_USD_ILS,USD,ILS,${type},0,,${date},${rate}`;
 
@@ -34,4 +34,16 @@ test('invalid, absent, nonofficial or future rates never become a guessed rate',
   for (const csv of [header, header + '\n' + row('2026-10-21', 3), '<html>not CSV</html>', header + '\n' + row('2026-10-19', 3, 'OTHER')]) {
     assert.throws(() => exchangeResult(csv, '2026-10-20'), { status: 502 });
   }
+});
+
+test('Priority retains separate sales-dollar and USD historical rates', () => {
+  const rows = ['USD', '$'].map((CODE, i) => ({ CODE, EXCHQUANT: '1', EXCH: '9', EXCHDATE: '2026-10-21', CURRHIS_SUBFORM: [
+    { CURDATE: '2026-10-19', EXCH: i ? '3.1722' : '3.11', SDATE: '2026-10-19T17:00:00+03:00' },
+    { CURDATE: '2026-10-16', EXCH: '3.089' },
+  ] }));
+  const result = priorityExchangeResult(rows, '2026-10-20');
+  assert.equal(result.source, 'priority'); assert.equal(result.rates.USD.rate, 3.11); assert.equal(result.rates.$.rate, 3.1722);
+  assert.equal(result.rates.$.rateDate, '2026-10-19');
+  assert.throws(() => priorityExchangeResult(rows, '2026-10-15'), { status: 502 });
+  assert.throws(() => priorityExchangeResult([rows[0]], '2026-10-20'), { status: 502 });
 });

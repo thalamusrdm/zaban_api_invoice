@@ -49,4 +49,21 @@ function exchangeResult(csv, date) {
   return { date, source: 'bank-of-israel', rates: { USD: info, '$': { ...info } } };
 }
 
-module.exports = { exchangeQuery, exchangeResult };
+function priorityExchangeResult(rows, date) {
+  const rates = {};
+  for (const row of rows) {
+    if (!['USD', '$'].includes(row.CODE)) continue;
+    const quantity = Number(row.EXCHQUANT);
+    if (!Number.isFinite(quantity) || quantity <= 0) continue;
+    const history = [...(row.CURRHIS_SUBFORM || []), { EXCH: row.EXCH, CURDATE: row.EXCHDATE }]
+      .filter(x => validDate(x.CURDATE) && x.CURDATE <= date)
+      .sort((a, b) => b.CURDATE.localeCompare(a.CURDATE) || String(b.SDATE || '').localeCompare(String(a.SDATE || '')));
+    const latest = history[0];
+    const rate = Number((Number(latest?.EXCH) / quantity).toFixed(6));
+    if (Number.isFinite(rate) && rate > 0 && rate <= 9999999.999999) rates[row.CODE] = { rate, rateDate: latest.CURDATE, updatedAt: latest.SDATE || null };
+  }
+  if (!rates.USD || !rates.$) { const error = new Error('חסר שער דולר תקין בפריוריטי עבור USD או $ לתאריך החשבונית'); error.status = 502; throw error; }
+  return { date, source: 'priority', rates };
+}
+
+module.exports = { exchangeQuery, exchangeResult, priorityExchangeResult };

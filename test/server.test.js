@@ -7,7 +7,7 @@ const { Readable } = require('node:stream');
 const path = require('node:path');
 
 // The real HTTP handler runs with a fake Priority transport and no filesystem writes.
-function isolatedServer(getResponse, responseStatus = 200) {
+function isolatedServer(getResponse, responseStatus = 200, sdk = {}) {
   let handler;
   const calls = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8'), {
@@ -15,7 +15,7 @@ function isolatedServer(getResponse, responseStatus = 200) {
     require(name) {
       if (name === 'http') return { createServer(fn) { handler = fn; return { listen() {} }; } };
       if (name === 'fs') return { existsSync: () => false, appendFile() {} };
-      if (name === './priority-sdk') return {};
+      if (name === './priority-sdk') return sdk;
       if (name === './invoice-payload') return require('../invoice-payload');
       if (name === './exchange-rates') return require('../exchange-rates');
       return require(name);
@@ -145,4 +145,22 @@ test('scanner lookup uses exact part/barcode matching, type and active status in
   assert.ok(filter.includes("EDEA_PARTTYPE eq '4'"));
   assert.ok(filter.includes("STATDES eq 'פעיל'"));
   assert.equal(filter.includes('*'), false);
+});
+
+test('Priority and BOI routes cache separately without silent source fallback', async () => {
+  let sdkReads = 0;
+  const server = isolatedServer(() => 'SERIES_CODE,BASE_CURRENCY,COUNTER_CURRENCY,DATA_TYPE,UNIT_MULT,TIME_PERIOD,OBS_VALUE\nRER_USD_ILS,USD,ILS,OF00,0,2026-10-19,3.11\n', 200, {
+    async getCurrencyRates(date) {
+      sdkReads++; assert.equal(date, '2026-10-20');
+      return ['USD', '$'].map((CODE, i) => ({ CODE, EXCHQUANT: 1, EXCH: i ? 3.1722 : 3.11, EXCHDATE: '2026-10-19' }));
+    },
+  });
+  const boi = await server.request('GET', '/api/exchange-rates?date=2026-10-20');
+  const priority = await server.request('GET', '/api/exchange-rates?date=2026-10-20&source=priority');
+  assert.equal(boi.body.rates.$.rate, 3.11); assert.equal(priority.body.rates.$.rate, 3.1722);
+  assert.equal(priority.body.source, 'priority');
+  await server.request('GET', '/api/exchange-rates?date=2026-10-20&source=priority');
+  assert.equal(sdkReads, 1); assert.equal(server.calls.length, 1);
+  const invalid = await server.request('GET', '/api/exchange-rates?date=2026-10-20&source=unknown');
+  assert.equal(invalid.status, 400); assert.equal(sdkReads, 1);
 });
