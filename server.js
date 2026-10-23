@@ -35,13 +35,40 @@ if (!BASE_URL || !COMPANY || !USER || !PASSWORD || PASSWORD.startsWith('*')) {
 sdk = require('./priority-sdk');
 
 const API_BASE = `${BASE_URL.replace(/\/$/, '')}/${COMPANY}`;
+const getStoredOriginal = require('./original-documents').originalStore(path.join(__dirname, 'data', 'originals'));
 const AUTH = 'Basic ' + Buffer.from(`${USER}:${PASSWORD}`).toString('base64');
 const LOG_FILE = path.join(__dirname, 'requests.log');
+const digital = require('./digital-invoice');
+const delivery = digital.workflowStore(path.join(__dirname, 'data', 'delivery'));
+const { randomUUID, createHash } = require('node:crypto');
 
 function log(entry) {
   const line = JSON.stringify({ ts: new Date().toISOString(), ...entry });
   fs.appendFile(LOG_FILE, line + '\n', () => {});
   console.log(line);
+}
+
+
+async function ownedInvoice(ivnum) {
+  if(!/^IN[0-9]+$/.test(ivnum))throw badRequest('נדרשת חשבונית IN סופית');
+  const row=await priority('GET',`AINVOICES(IVNUM='${odataStr(ivnum)}',IVTYPE='A',DEBIT='D')?$select=IV,IVNUM,CUSTNAME,OWNERLOGIN`);
+  if(!row.IV || row.OWNERLOGIN!==USER)throw badRequest('החשבונית אינה בטיפול משתמש ה-API');
+  return {...row,workflowKey:digital.keyFor(API_BASE,row.IV)};
+}
+async function copyBytes(ivnum) {
+  const doc=await sdk.getInvoiceDocumentUrl(ivnum,log);
+  let buffer;
+  if(doc.datauri){const m=doc.datauri.match(/^data:application\/pdf;base64,(.*)$/s);if(!m)throw badRequest('העתק החשבונית אינו PDF');buffer=Buffer.from(m[1],'base64');}
+  else {
+    const url=new URL(await sdk.resolveOriginalDocumentUrl(doc.url));
+    if(url.origin!==new URL(BASE_URL).origin)throw badRequest('כתובת מסמך לא תקינה');
+    let response=await fetch(url,{signal:AbortSignal.timeout(TIMEOUT_MS)});
+    if(!response.ok)response=await fetch(url,{headers:{Authorization:AUTH},signal:AbortSignal.timeout(TIMEOUT_MS)});
+    if(!response.ok)throw badRequest('לא ניתן לטעון את העתק החשבונית');
+    buffer=Buffer.from(await response.arrayBuffer());
+  }
+  if(buffer.subarray(0,5).toString()!=='%PDF-' || buffer.length>15000000)throw badRequest('קובץ ההעתק אינו PDF תקין או גדול מדי');
+  return buffer;
 }
 
 // ---------- קריאה ל-Priority ----------
@@ -68,7 +95,7 @@ async function priority(method, pathAndQuery, body) {
     e.status = 502;
     throw e;
   }
-  log({ method, url, status: res.status, body: body || undefined, response: text.slice(0, 2000), ms: Date.now() - started });
+  log({ method, url, status: res.status, body: body?.EXTFILENAME ? { ...body, EXTFILENAME: '[PDF attachment omitted]' } : body || undefined, response: text.slice(0, 2000), ms: Date.now() - started });
 
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { /* לא JSON */ }
@@ -260,6 +287,13 @@ const handlers = {
     const before = await priority('GET', `${key}?$select=IV,STATDES`);
     if (before.STATDES !== 'טיוטא') throw badRequest(`חשבונית ${ivnum} אינה טיוטה (סטטוס: ${before.STATDES})`);
 
+    const digitalContext = await delivery.read(digital.keyFor(API_BASE,before.IV));
+    if(digitalContext?.originalDownload) await handlers['POST /api/invoices/original-download-preflight'](null, { custname: digitalContext.custname });
+    if(digitalContext?.digitalEmail){
+      const profile=await sdk.digitalCustomerForm(digitalContext.custname);
+      if(!profile.digital || profile.email!==digitalContext.email)throw badRequest('פרטי המייל בפריוריטי השתנו. יש לתקן אותם לפני הסגירה.');
+      await sdk.prepareDigitalInvoice(ivnum,digitalContext.custname);
+    }
     // מריצים את הסגירה; גם אם ה-SDK נכשל (למשל בשלב שליחת מייל אחרי הסגירה),
     // המצב בפועל נקבע לפי מה שקרה לחשבונית עצמה
     let result = null, sdkError = null;
@@ -274,9 +308,9 @@ const handlers = {
     const inv = after?.value?.[0];
     if (inv && !(inv.IVNUM === ivnum && inv.STATDES === 'טיוטא')) {
       // נסגרה בפועל — הצלחה, גם אם היה כשל בשלב משני של הפרוצדורה (מייל/הדפסה)
-      return { ivnum: inv.IVNUM, status: inv.STATDES };
+      return { ivnum: inv.IVNUM, status: inv.STATDES, originalDownload:!!digitalContext?.originalDownload, digitalEmail:!!digitalContext?.digitalEmail, email:digitalContext?.email };
     }
-    if (!inv) return { ivnum, status: 'נסגרה (רעננו את הרשימה)' };
+    if (!inv) throw Object.assign(new Error('לא ניתן לאמת את הסגירה בפריוריטי. החשבונית כבר נוצרה; יש לבדוק את מצבה לפני ניסיון נוסף.'), { status: 502 });
 
     // עדיין טיוטה — כישלון אמיתי; מציגים את ההודעה של פריוריטי כפי שהיא
     const why = [
@@ -288,6 +322,142 @@ const handlers = {
   },
 
   // הורדת מסמך החשבונית (PDF): מפיקים דרך ה-SDK ומזרימים ללקוח
+  'GET /api/customers/digital': async q => {
+    const custname=(q.get('custname')||'').trim();if(!custname || custname.length>16)throw badRequest('חסר מספר לקוח תקין');
+    return sdk.digitalCustomerForm(custname);
+  },
+  'POST /api/invoices/digital-preflight': async (_q,body) => {
+    const email=digital.digitalConsent(body);const custname=String(body.custname||'').trim();
+    if(!custname || custname.length>16)throw badRequest('חסר מספר לקוח תקין');
+    const profile=await sdk.digitalCustomerForm(custname);
+    if(!profile.name)throw badRequest('חסר שם לקוח בפריוריטי');
+    if(profile.blocked)throw badRequest('כרטיס הלקוח אינו פעיל בפריוריטי');
+    if(profile.requiredMissing?.length)throw badRequest('חסרים שדות חובה בפריוריטי: '+profile.requiredMissing.map(x=>x.title).join(', '));
+    return {ok:true,custname,email,willUpdateEmail:profile.email!==email,willEnableDigital:!profile.digital};
+  },
+  'POST /api/invoices/email': async (_q,body) => {
+    const email=digital.digitalConsent(body);const ivnum=String(body.ivnum||'');const inv=await ownedInvoice(ivnum);
+    const context=await delivery.read(inv.workflowKey);
+    if(!context?.digitalEmail || context.email!==email || context.custname!==inv.CUSTNAME)throw badRequest('אין לחשבונית אישור נמען תואם שנשמר בעת ההפקה');
+    return delivery.once(inv.workflowKey,'mail',()=>sdk.sendDigitalInvoice(ivnum,email,context.custname));
+  },
+  'GET /api/invoices/signature-copy': async q => {
+    const ivnum=String(q.get('ivnum')||'');const inv=await ownedInvoice(ivnum);
+    const record=await delivery.once(inv.workflowKey,'copy',async()=>{
+      const buffer=await copyBytes(ivnum);await delivery.saveFile(inv.workflowKey,'copy',buffer);
+      return {token:randomUUID(),ivnum,custname:inv.CUSTNAME,sha256:createHash('sha256').update(buffer).digest('hex'),at:new Date().toISOString()};
+    });
+    return {__file:{buffer:await delivery.readFile(inv.workflowKey,'copy'),contentType:'application/pdf',filename:ivnum+'-copy.pdf',headers:{'X-Signature-Token':record.token}}};
+  },
+  'POST /api/invoices/sign': async (_q,body) => {
+    const ivnum=String(body?.ivnum||'');const inv=await ownedInvoice(ivnum);
+    const copy=await delivery.read(inv.workflowKey,'copy');
+    if(copy?.status!=='complete' || copy.result.token!==body.token)throw badRequest('יש לפתוח תחילה את העתק החשבונית בממשק החתימה');
+    const mailState=await delivery.read(inv.workflowKey,'mail');
+    if(mailState?.status==='started')throw Object.assign(new Error('משלוח המקור עדיין מתבצע. יש להמתין לפני צירוף החתימה.'),{status:409});
+    const png=digital.signatureImage(body.signature);
+    const signer=String(body.signer||'').trim();
+    const payloadHash=createHash('sha256').update(png).update(signer).digest('hex');
+    const prior=await delivery.read(inv.workflowKey,'signature');
+    if(prior?.payloadHash && prior.payloadHash!==payloadHash)throw badRequest('לחשבונית זו כבר נשמר ניסיון חתימה אחר; נדרשת בדיקה');
+    const descriptor='SIGNED_'+ivnum+'_'+payloadHash.slice(0,10);
+    const attachmentPath=`AINVOICES(IVNUM='${odataStr(ivnum)}',IVTYPE='A',DEBIT='D')/EXTFILES_SUBFORM`;
+    // Reconcile a timed-out upload by its deterministic descriptor before any retry.
+    const existing=await priority('GET',attachmentPath+`?$select=EXTFILENUM,EXTFILEDES&$filter=EXTFILEDES eq '${descriptor}'`);
+    if(existing.value?.length){const result={attached:true,ivnum,attachment:existing.value[0].EXTFILENUM};await delivery.write(inv.workflowKey,'attachment',{status:'complete',result});return result;}
+    const signedAt=prior?.signedAt||new Date().toISOString();
+    const original=await delivery.readFile(inv.workflowKey,'copy');
+    if(createHash('sha256').update(original).digest('hex')!==copy.result.sha256)throw badRequest('עותק החשבונית השתנה. השמירה נחסמה.');
+    const buffer=await digital.signedCopy(original,png,{ivnum,custname:inv.CUSTNAME,signer,signedAt});
+    const result=await delivery.once(inv.workflowKey,'attachment',async()=>{
+      if(!prior){await delivery.write(inv.workflowKey,'signature',{payloadHash,signer,signedAt,copyHash:copy.result.sha256,descriptor});await delivery.saveFile(inv.workflowKey,'signed',buffer);}
+      const saved=await delivery.readFile(inv.workflowKey,'signed');
+      await priority('POST',attachmentPath,{EXTFILEDES:descriptor,EXTFILENAME:'data:application/pdf;base64,'+saved.toString('base64'),SUFFIX:'.pdf'});
+      const confirm=await priority('GET',attachmentPath+`?$select=EXTFILENUM,EXTFILEDES&$filter=EXTFILEDES eq '${descriptor}'`);
+      if(!confirm.value?.length)throw Error('לא ניתן לאמת את הנספח בפריוריטי. אין לצרף שוב לפני בירור.');
+      return {attached:true,ivnum,attachment:confirm.value[0].EXTFILENUM,payloadHash};
+    });
+    if(result.payloadHash && result.payloadHash!==payloadHash)throw badRequest('כבר נשמרה חתימה אחרת לחשבונית זו');
+    return result;
+  },
+
+  // Download existing signed bytes only; no printing, generation or email.
+  'GET /api/invoices/existing-original': async q => {
+    const ivnum = String(q.get('ivnum') || '').trim();
+    await ownedInvoice(ivnum);
+    const attachments = await priority('GET', "AINVOICES(IVNUM='" + odataStr(ivnum) + "',IVTYPE='A',DEBIT='D')/EXTFILES_SUBFORM?$select=EXTFILENUM,EXTFILEDES,EXTFILENAME");
+    const originals = (attachments.value || []).filter(row => String(row.EXTFILEDES || '').trim() === 'מסמך ממוחשב');
+    if (!originals.length) throw Object.assign(new Error('לא נמצא מקור קיים בנספחי החשבונית. לא הופק מסמך ולא נשלח מייל.'), { status: 404 });
+    if (originals.length !== 1) throw badRequest('נמצאו כמה מסמכי מקור בנספחים. נדרשת בדיקה בפריוריטי לבחירת המסמך הנכון.');
+    const match = String(originals[0].EXTFILENAME || '').match(/^data:application\/pdf;base64,([A-Za-z0-9+/=\r\n]+)$/);
+    if (!match) throw badRequest('הנספח המקורי לא הוחזר כקובץ PDF. לא תופעל הפקה נוספת.');
+    const buffer = Buffer.from(match[1], 'base64');
+    // Structural checks only, not cryptographic signature validation.
+    if (buffer.subarray(0, 5).toString() !== '%PDF-' || !buffer.includes(Buffer.from('/ByteRange'))) throw badRequest('נספח המקור אינו PDF עם נתוני חתימה דיגיטלית. נדרשת בדיקה בפריוריטי.');
+    return { __file: { buffer, contentType: 'application/pdf', filename: ivnum + '-original.pdf' } };
+  },
+
+  'POST /api/invoices/original-download-preflight': async (_q, body) => {
+    const custname = String(body?.custname || '').trim();
+    if (!custname || custname.length > 16) throw badRequest('חסר מספר לקוח תקין');
+    const profile = await sdk.digitalCustomerForm(custname);
+    if (!profile.name || profile.blocked || profile.requiredMissing?.length) throw badRequest('יש להשלים את פרטי החובה של הלקוח בפריוריטי לפני ההפקה');
+    if (!profile.digital) throw badRequest('הלקוח אינו מוגדר כמקבל מסמך ממוחשב בפריוריטי. יש להסדיר זאת לפני הפקת מקור דיגיטלי.');
+    return { ready: true, custname };
+  },
+  'POST /api/invoices/prepare-original-download': async (_q, body) => {
+    const ivnum = String(body?.ivnum || '').trim();
+    const inv = await ownedInvoice(ivnum);
+    const query = { get: name => name === 'ivnum' ? ivnum : null };
+    const existing = async () => {
+      try { return (await handlers['GET /api/invoices/existing-original'](query)).__file.buffer; }
+      catch (error) { if (error.status === 404) return null; throw error; }
+    };
+    if (await existing()) return { ready: true, ivnum, existing: true };
+    const context = await delivery.read(inv.workflowKey);
+    if (!context?.originalDownload || context.custname !== inv.CUSTNAME) throw badRequest('אין לחשבונית זו תהליך הפקת מקור ללא מייל. אפשר להוריד מקור שכבר קיים בלבד.');
+    return delivery.once(inv.workflowKey, 'original-preparation', async () => {
+      // The persisted original store and native PRINTED guard prevent regeneration.
+      const generated = (await handlers['POST /api/invoices/original'](null, { ivnum })).__file.buffer;
+      let saved = await existing();
+      if (!saved) {
+        await priority('POST', "AINVOICES(IVNUM='" + odataStr(ivnum) + "',IVTYPE='A',DEBIT='D')/EXTFILES_SUBFORM", { EXTFILEDES: 'מסמך ממוחשב', EXTFILENAME: 'data:application/pdf;base64,' + generated.toString('base64'), SUFFIX: '.pdf' });
+        saved = await existing();
+      }
+      if (!saved || !saved.equals(generated)) throw Error('לא ניתן לאמת שמקור החשבונית נשמר בנספחים ללא שינוי. אין להפיק שוב.');
+      return { ready: true, ivnum, sha256: createHash('sha256').update(saved).digest('hex') };
+    });
+  },
+
+  'GET /api/invoices/original-readiness': async q => {
+    const custname = (q.get('custname') || '').trim();
+    if (!custname || custname.length > 16) throw badRequest('חסר מספר לקוח תקין');
+    return sdk.getOriginalCustomerReadiness(custname);
+  },
+
+  'POST /api/invoices/original': async (_q, body) => {
+    const ivnum = String(body?.ivnum || '').trim();
+    if (!/^IN[0-9]+$/.test(ivnum)) throw badRequest('להורדת מקור נדרש מספר חשבונית IN סופית');
+    const own = await priority('GET', `AINVOICES(IVNUM='${odataStr(ivnum)}',IVTYPE='A',DEBIT='D')?$select=OWNERLOGIN,IV`);
+    if (own.OWNERLOGIN !== USER) throw badRequest('אפשר להפיק מקור רק לחשבונית בטיפול משתמש ה-API');
+    if (!own.IV) throw badRequest('חסר מזהה פנימי של החשבונית');
+    const key = [API_BASE, own.IV].join('|');
+    const buffer = await getStoredOriginal(key, () => sdk.getOriginalInvoiceDocument(ivnum), async doc => {
+      if (doc.datauri) {
+        const match = doc.datauri.match(/^data:application\/pdf;base64,(.*)$/s);
+        if (!match) throw badRequest('לא התקבל PDF בפרוצדורת המקור');
+        return Buffer.from(match[1], 'base64');
+      }
+      const url = new URL(await sdk.resolveOriginalDocumentUrl(doc.url));
+      if (url.origin !== new URL(BASE_URL).origin) throw badRequest('כתובת מקור לא תקינה');
+      let response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!response.ok) response = await fetch(url, { headers: { Authorization: AUTH }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (!response.ok) throw badRequest('המקור נוצר אך ההורדה נכשלה. ניסיון חוזר יוריד את אותו קובץ.');
+      return Buffer.from(await response.arrayBuffer());
+    });
+    return { __file: { buffer, contentType: 'application/pdf', filename: ivnum + '-original.pdf' } };
+  },
+
   'GET /api/invoices/document': async (q) => {
     const ivnum = (q.get('ivnum') || '').trim();
     if (!ivnum) throw badRequest('חסר מספר חשבונית');
@@ -328,16 +498,39 @@ const handlers = {
 
   // יצירת חשבונית
   'POST /api/invoices': async (_q, body) => {
-    const payload = buildInvoicePayload(body, USER);
+    const payload=buildInvoicePayload(body,USER);
+    if(body?.original===true){const readiness=await sdk.getOriginalCustomerReadiness(String(body.custname||'').trim());if(!readiness.ready)throw badRequest(readiness.reason);}
+    if (body?.originalDownload === true) {
+      if (body.digitalEmail === true) throw badRequest('יש לבחור מסלול הורדה ללא מייל בלבד');
+      await handlers['POST /api/invoices/original-download-preflight'](null, body);
+      const requestId = String(body.requestId || '');
+      if (!/^[a-f0-9-]{36}$/i.test(requestId)) throw badRequest('חסר מזהה ניסיון הפקה. יש לרענן לפני הפקה.');
+      const requestKey = digital.keyFor(API_BASE, 'request:' + requestId);
+      await delivery.bind(requestKey, createHash('sha256').update(JSON.stringify({ payload, originalDownload: true })).digest('hex'));
+      return delivery.once(requestKey, 'creation', async () => {
+        const inv = await priority('POST', 'AINVOICES?$expand=AINVOICEITEMS_SUBFORM', payload);
+        if (!inv.IV) throw Error('הטיוטה נוצרה אך חסר מזהה פנימי; יש לבדוק בפריוריטי ולא להפיק שוב');
+        await delivery.write(digital.keyFor(API_BASE, inv.IV), 'context', { originalDownload: true, custname: payload.CUSTNAME, createdDraft: inv.IVNUM, requestId });
+        return { ivnum: inv.IVNUM, status: inv.STATDES, beforeVat: inv.QPRICE, vat: inv.VAT, total: inv.TOTPRICE, originalDownload: true };
+      });
+    }
+    if(body?.digitalEmail!==true){const inv=await priority('POST','AINVOICES?$expand=AINVOICEITEMS_SUBFORM',payload);return {ivnum:inv.IVNUM,status:inv.STATDES,beforeVat:inv.QPRICE,vat:inv.VAT,total:inv.TOTPRICE};}
+    const email=digital.digitalConsent(body);
+    const requestId=String(body.requestId||'');if(!/^[a-f0-9-]{36}$/i.test(requestId))throw badRequest('חסר מזהה ניסיון הפקה. יש לרענן לפני הפקה.');
+    const requestKey=digital.keyFor(API_BASE,'request:'+requestId);
+    const fingerprint=createHash('sha256').update(JSON.stringify({payload,email})).digest('hex');
+    await delivery.bind(requestKey,fingerprint);
+    return delivery.once(requestKey,'creation',async()=>{
+      const recipient=await sdk.prepareDigitalCustomer(String(body.custname||'').trim(),email);
+      payload.NAME='';
+      const inv=await priority('POST','AINVOICES?$expand=AINVOICEITEMS_SUBFORM',payload);
+      if(!inv.IV)throw Error('הטיוטה נוצרה אך חסר מזהה פנימי; יש לבדוק בפריוריטי ולא להפיק שוב');
+      await delivery.write(digital.keyFor(API_BASE,inv.IV),'context',{digitalEmail:true,consentAt:new Date().toISOString(),custname:recipient.custname,email:recipient.email,createdDraft:inv.IVNUM,requestId});
+      let prepared=true,preparationError;
+      try{await sdk.prepareDigitalInvoice(inv.IVNUM,recipient.custname);}catch(e){prepared=false;preparationError=e.message;}
+      return {ivnum:inv.IVNUM,status:inv.STATDES,beforeVat:inv.QPRICE,vat:inv.VAT,total:inv.TOTPRICE,digitalEmail:true,email:recipient.email,prepared,preparationError};
+    });
 
-    const inv = await priority('POST', 'AINVOICES?$expand=AINVOICEITEMS_SUBFORM', payload);
-    return {
-      ivnum: inv.IVNUM,
-      status: inv.STATDES,
-      beforeVat: inv.QPRICE,
-      vat: inv.VAT,
-      total: inv.TOTPRICE,
-    };
   },
 };
 
@@ -360,7 +553,8 @@ const server = http.createServer(async (req, res) => {
     let body = null;
     if (req.method === 'POST') {
       const chunks = [];
-      for await (const c of req) chunks.push(c);
+      let size=0;
+      for await (const c of req){size+=c.length;if(size>10000000){res.writeHead(413,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:'הבקשה גדולה מדי'}));return;}chunks.push(c);}
       try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); }
       catch { res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }); return res.end(JSON.stringify({ error: 'JSON לא תקין' })); }
     }
@@ -372,12 +566,14 @@ const server = http.createServer(async (req, res) => {
           'Content-Type': f.contentType,
           'Content-Disposition': `attachment; filename="${encodeURIComponent(f.filename)}"`,
           'Content-Length': f.buffer.length,
+          ...(f.headers || {}),
         });
         return res.end(f.buffer);
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(data));
     } catch (err) {
+      log({ route: key, error: err.message });
       res.writeHead(err.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: err.message }));
     }

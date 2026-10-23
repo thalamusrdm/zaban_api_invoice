@@ -1,0 +1,59 @@
+{
+  "name": "ZBAN_ORIGINALPDF",
+  "title": "מקור חשבונית API ללא מייל",
+  "company": "zaban",
+  "appname": "local-invoices",
+  "steps": [
+    {
+      "position": 10,
+      "entity": "INPUTF",
+      "type": "B",
+      "parameters": [
+        {
+          "NAME": "NUM",
+          "TYPE": "CHAR",
+          "WIDTH": "20",
+          "POS": "10",
+          "TITLE": "מספר חשבונית",
+          "HIDE": "M"
+        }
+      ]
+    },
+    {
+      "position": 20,
+      "entity": "SQLI",
+      "type": "C",
+      "parameters": [
+        {
+          "NAME": "NUM",
+          "TYPE": "CHAR",
+          "WIDTH": "20"
+        },
+        {
+          "NAME": "ADD",
+          "TYPE": "ASCII"
+        }
+      ],
+      "queryFile": "render.sql"
+    },
+    {
+      "position": 30,
+      "entity": "URL",
+      "type": "B",
+      "parameters": [
+        {
+          "NAME": "ADD",
+          "TYPE": "ASCII",
+          "POS": "10"
+        }
+      ]
+    }
+  ],
+  "messages": {
+    "501": "הפעולה מיועדת למשתמש API בלבד בחברת צבאן",
+    "502": "החשבונית אינה חשבונית מס סופית בטיפול משתמש ה-API",
+    "503": "הלקוח אינו מוגדר לקבלת מסמך ממוחשב בפריוריטי",
+    "504": "לא ניתן להפיק את המסמך. אין לנסות שוב אוטומטית",
+    "505": "החשבונית כבר הודפסה. יש לשלוף מקור שנשמר או להוריד העתק"
+  }
+}

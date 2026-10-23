@@ -173,7 +173,7 @@ async function getInvoiceDocumentUrl(ivnum, log) {
         trace(stage);
         if (step.type === 'documentOptions') {
           const f = (step.formats || []).find(x => x.selected) || (step.formats || [])[0];
-          step = await withTimeout(step.proc.documentOptions(1, f ? f.format : 1, 1 /* PDF */), stage);
+          step = await withTimeout(step.proc.documentOptions(1, f ? f.format : 1, { pdf: 1, word: 0, mode: 'display' }), stage);
         } else if (step.type === 'reportOptions') {
           const f = (step.formats || []).find(x => x.selected) || (step.formats || [])[0];
           step = await withTimeout(step.proc.reportOptions(1, f ? f.format : 1), stage);
@@ -193,7 +193,7 @@ async function getInvoiceDocumentUrl(ivnum, log) {
           trace('client step data: ' + JSON.stringify(step.data).slice(0, 500));
           const m = JSON.stringify(step.data || '').match(/https?:\\?\/\\?\/[^"']+|\.\.[^"']*\.(pdf|htm[l]?)/i);
           if (m) { url = m[0].replace(/\\\//g, '/'); trace('url from client step: ' + url); }
-          step = await withTimeout(step.proc.continueProc(), stage);
+          step = await withTimeout(step.proc.clientContinue(), stage);
         } else {
           throw new Error(`שלב לא נתמך בהפקת המסמך (${step.type})`);
         }
@@ -265,4 +265,151 @@ async function getGoldPrices(cutoff) {
   }
 }
 
-module.exports = { closeInvoice, getInvoiceDocumentUrl, getCurrencyRates, getGoldPrices };
+
+// Standalone custom procedure; never changes regular AINVOICES activations.
+async function getOriginalInvoiceDocument(ivnum) {
+  await ensureLogin();
+  let proc;
+  try {
+    let step = await withTimeout(priority.procStart('ZBAN_ORIGINALPDF', 'P', () => {}, undefined), 'original procedure');
+    proc = step?.proc;
+    if (step?.type !== 'inputFields' || step.input?.EditFields?.length !== 1) throw new Error('מבנה הקלט של פרוצדורת המקור אינו תואם');
+    const field = step.input.EditFields[0];
+    step = await withTimeout(proc.inputFields(1, { EditFields: [{ field: field.field, op: 0, value: ivnum, op2: 0, value2: '' }] }), 'original generation');
+    for (let i = 0; i < 12 && step; i++) {
+      if (step.type === 'displayUrl') {
+        const first = Array.isArray(step.Urls) ? step.Urls[0] : step.Urls;
+        let url = (typeof first === 'string' ? first : first?.url) || step.url;
+        if (url && typeof url === 'object') url = url.url;
+        if (first?.datauri) return { datauri: first.datauri };
+        if (typeof url !== 'string' || !url.trim()) throw new Error('המקור לא החזיר כתובת קובץ');
+        // Persist the native path before translation/download, so failures never lose it.
+        return { url };
+      }
+      // Warnings are not auto-approved on the original path.
+      if (step.type === 'message') throw new Error(step.message || 'פריוריטי עצרה את הפקת המקור');
+      if (step.type === 'end') break;
+      throw new Error('שלב לא צפוי בפרוצדורת המקור: ' + step.type);
+    }
+    throw new Error('פרוצדורת המקור הסתיימה בלי קובץ');
+  } catch (err) { loginPromise = null; throw err; }
+  finally { if (proc) try { await withTimeout(proc.cancel(), 'release original procedure', 5000); } catch {} }
+}
+
+
+async function getOriginalCustomerReadiness(custname) {
+  await ensureLogin();
+  let form;
+  try {
+    form = await withTimeout(priority.formStart('CUSTOMERS', () => {}, () => {}, undefined, 0), 'original customer check');
+    if (!form.columns?.EDOCUMENTS) throw new Error('לא ניתן לבדוק בפריוריטי הגדרת מסמך ממוחשב');
+    await withTimeout(form.setSearchFilter({ or: 0, ignorecase: 1, QueryValues: [{ field: 'CUSTNAME', fromval: custname, op: '=', sort: 0, isdesc: 0 }] }), 'original customer filter');
+    const row = (await withTimeout(form.getRows(1), 'original customer settings'))?.CUSTOMERS?.['1'];
+    if (!row || row.CUSTNAME !== custname) throw new Error('הלקוח לא נמצא בבדיקת מסמך ממוחשב');
+    const ready = ['Y', '1', 1, true].includes(row.EDOCUMENTS);
+    return { ready, custname, reason: ready ? '' : 'הלקוח ' + custname + ' אינו מוגדר בפריוריטי כ״מקבל מסמך ממוחשב״. לא נוצרה חשבונית במסלול זה. אפשר לבחור הורדת העתק או להסדיר את הגדרת הלקוח.' };
+  } finally { if (form) try { await withTimeout(form.endCurrentForm(), 'close original customer check', 5000); } catch {} }
+}
+
+
+async function resolveOriginalDocumentUrl(filename) {
+  let url = filename;
+  if (typeof url !== 'string' || !url.trim()) throw new Error('חסרה כתובת המקור שנשמר');
+  if (!/^https?:/i.test(url)) {
+    await ensureLogin();
+    let form;
+    try {
+      form = await withTimeout(priority.formStart('AINVOICES', () => {}, () => {}, undefined, 0), 'resolve saved original path');
+      url = await withTimeout(form.getFileUrl(url), 'original file URL');
+    } finally { if (form) try { await form.endCurrentForm(); } catch {} }
+  }
+  if (new URL(url).origin !== new URL(process.env.PRIORITY_BASE_URL).origin) throw new Error('התקבל קישור מחוץ לשרת פריוריטי');
+  return url;
+}
+
+
+async function digitalCustomerForm(custname, change) {
+  await ensureLogin();
+  let form, error;
+  const onMessage = m => { if (m.type === 'information') form?.infoMsgConfirm(); else { error = new Error(errText(m)); if (m.type === 'warning') form?.warningConfirm(0); } };
+  try {
+    form = await withTimeout(priority.formStart('CUSTOMERS', onMessage, () => {}, undefined, 0), 'digital customer');
+    for (const field of ['EMAIL','EDOCUMENTS']) if (!form.columns?.[field]) throw Error('לא נמצא שדה ' + field + ' בכרטיס הלקוח');
+    await withTimeout(form.setSearchFilter({or:0,ignorecase:1,QueryValues:[{field:'CUSTNAME',fromval:custname,op:'=',sort:0,isdesc:0}]}), 'digital customer filter');
+    const row = (await withTimeout(form.getRows(1), 'digital customer data'))?.CUSTOMERS?.['1'];
+    if (!row || row.CUSTNAME !== custname) throw Error('הלקוח לא נמצא בפריוריטי');
+    if (change) {
+      await form.setActiveRow(1);
+      if (row.EMAIL !== change.email) await form.fieldUpdate('EMAIL', change.email);
+      if (!['Y','1',1,true].includes(row.EDOCUMENTS)) await form.fieldUpdate('EDOCUMENTS','Y');
+      if (error) throw error;
+      await withTimeout(form.saveRow(0), 'save digital customer');
+      if (error) throw error;
+    }
+    const requiredMissing=Object.entries(form.columns).filter(([key,col])=>col.mandatory===1 && col.readonly===0 && col.type!=='bool' && (row[key]===undefined || row[key]===null || row[key]==='')).map(([key,col])=>({field:key,title:col.title}));
+    const blocked=['לא פעיל','מבוטל'].includes(row.STATDES);
+    return {requiredMissing,blocked,custname:row.CUSTNAME,name:row.CUSTDES,email:row.EMAIL||'',digital:['Y','1',1,true].includes(row.EDOCUMENTS),companyNumber:row.WTAXNUM||'',vatNumber:row.VATNUM||'',numberExplanation:row.WTAXNUMEXPL||''};
+  } finally { if (form) try { await form.endCurrentForm(); } catch {} }
+}
+async function prepareDigitalCustomer(custname,email) {
+  const before=await digitalCustomerForm(custname);
+  if(before.blocked || before.requiredMissing?.length)throw Error('יש להשלים שדות חובה בכרטיס הלקוח בפריוריטי: '+(before.requiredMissing||[]).map(x=>x.title).join(', '));
+  await digitalCustomerForm(custname,{email});
+  const saved = await digitalCustomerForm(custname);
+  if (!saved.digital || saved.email !== email || !saved.name) throw Error('לא ניתן לאמת את המייל והגדרת המסמך הממוחשב בפריוריטי');
+  return saved;
+}
+async function openDigitalInvoice(ivnum) {
+  await ensureLogin();
+  let form, error;
+  form = await withTimeout(priority.formStart('AINVOICES',m=>{if(m.type==='information')form?.infoMsgConfirm();else {error=new Error(errText(m));if(m.type==='warning')form?.warningConfirm(0);}},()=>{},undefined,0),'email invoice');
+  try {
+    await form.setSearchFilter({or:0,ignorecase:1,QueryValues:[{field:'IVNUM',fromval:ivnum,op:'=',sort:0,isdesc:0}]});
+    const row=(await form.getRows(1))?.AINVOICES?.['1'];
+    if(error)throw error;
+    if(!row || row.OWNERLOGIN!==process.env.PRIORITY_USER)throw Error('החשבונית אינה בטיפול משתמש ה-API');
+    await form.setActiveRow(1);return {form,row,getError:()=>error};
+  } catch(e) {try{await form.endCurrentForm();}catch{}throw e;}
+}
+async function prepareDigitalInvoice(ivnum,custname) {
+  const {form,row,getError}=await openDigitalInvoice(ivnum);
+  try {
+    if(row.CUSTNAME!==custname || row.FINAL==='Y')throw Error('נדרשת טיוטת החשבונית של הלקוח שנבחר');
+    // An empty invoice contact makes native automail use the verified customer EMAIL.
+    if(row.NAME){await form.fieldUpdate('NAME','');await form.saveRow(0);}
+    if(getError())throw getError();
+  }finally{await form.endCurrentForm();}
+}
+async function sendDigitalInvoice(ivnum,email,custname) {
+  const {form,row}=await openDigitalInvoice(ivnum);
+  let proc;
+  try {
+    if(row.CUSTNAME!==custname || row.FINAL!=='Y' || row.NAME)throw Error('לא ניתן לאמת חשבונית סופית ונמען מייל יחיד');
+    if(['Y','1',1,true].includes(row.PRINTEDBOOL))throw Error('החשבונית כבר הודפסה או הופקה. אין להפעיל משלוח מקור נוסף לפני בירור.');
+    const recipient=await digitalCustomerForm(custname);
+    if(!recipient.digital || recipient.email!==email)throw Error('פרטי המייל בפריוריטי השתנו מאז ההכנה. המשלוח נעצר.');
+    let step=await withTimeout(form.activateStart('WWWSHOWAIV','P',()=>{}),'start digital email');
+    proc=step?.proc;let requested=false;
+    for(let i=0;i<25 && step?.type;i++){
+      if(step.type==='end'){
+        if(!requested)throw Error('לא הופעלה בקשת משלוח');
+        return {acceptedByPriority:true,email,ivnum};
+      }
+      if(step.type==='client')step=await withTimeout(step.proc.clientContinue(),'email client');
+      else if(step.type==='documentOptions'){
+        if(requested || step.hasAutoMail===0)throw Error('משלוח מייל אינו זמין או הופעל פעמיים');
+        const format=(step.formats||[]).find(f=>f.selected)||(step.formats||[])[0];
+        if(!format)throw Error('חסרה תצורת חשבונית בפריוריטי');
+        requested=true;
+        step=await withTimeout(step.proc.documentOptions(1,format.format,{pdf:1,word:0,mode:'automail'}),'email original',90000);
+      }else if(step.type==='displayUrl')step=await withTimeout(step.proc.continueProc(),'complete email');
+      else if(step.type==='message'){
+        if(!['information','info'].includes(step.messagetype))throw Error(step.message||'פריוריטי עצרה את משלוח המקור');
+        step=await withTimeout(step.proc.message(1),'email information');
+      }else throw Error('שלב לא נתמך במשלוח: '+step.type);
+    }
+    throw Error('פריוריטי לא אישרה את סיום בקשת המשלוח');
+  }finally{try{await form.activateEnd();}catch{}if(proc)try{await proc.cancel();}catch{}await form.endCurrentForm();}
+}
+
+module.exports = { digitalCustomerForm, prepareDigitalCustomer, prepareDigitalInvoice, sendDigitalInvoice, resolveOriginalDocumentUrl, getOriginalCustomerReadiness, getOriginalInvoiceDocument, closeInvoice, getInvoiceDocumentUrl, getCurrencyRates, getGoldPrices };

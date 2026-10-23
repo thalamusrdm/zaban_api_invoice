@@ -131,6 +131,8 @@
 
   h2 { font-size: 16px; margin: 0 0 10px; }
   #recent table td, #recent table th { border-bottom: 1px solid var(--border); padding: 7px 6px; font-size: 13.5px; }
+  #recent .invoice-document-actions { white-space: normal; }
+  #recent .invoice-document-actions .close-btn { margin: 2px; }
   #recent .draft { color: var(--warn); }
   #recent .final { color: var(--ok); }
   .refresh { width: auto; padding: 4px 12px; font-size: 13px; cursor: pointer; background: none; color: var(--muted); }
@@ -265,11 +267,16 @@
       <div><span class="lbl">סה"כ לתשלום</span><b id="tTotal">0.00 ₪</b></div>
     </div>
 
+    <section aria-label="הורדת מקור החשבונית" style="margin-top:16px;padding:16px;border:1px solid var(--border);border-radius:12px">
+      <p class="field-note">המקור יישמר בנספחי החשבונית וירד אוטומטית למכשיר, ללא משלוח מייל. לאחר מכן ייפתח העתק נפרד לחתימת הלקוח.</p>
+      <p id="digitalStatus" class="field-note" role="status">יש לבחור לקוח לבדיקת הגדרת מסמך ממוחשב בפריוריטי.</p>
+    </section>
     <div class="actions">
-      <button type="submit" id="submit">הפקת חשבונית</button>
-      <span style="font-size:12.5px;color:var(--muted)">החשבונית תיווצר כטיוטה (מספר T). הסכום הקובע הוא מה ש-Priority מחזיר.</span>
+      <button type="submit" id="submit">הפקה, סגירה והורדת מקור</button>
+      <span style="font-size:12.5px;color:var(--muted)">לאחר בדיקת פרטי הלקוח תיווצר חשבונית סופית (IN), המקור יישמר בנספחים וירד למכשיר ללא מייל, והעתק ייפתח לחתימה. סגירה לסופית אינה ניתנת לביטול. הסכום הקובע הוא בפריוריטי.</span>
     </div>
     <div class="msg" id="msg"></div>
+    <div class="msg" id="documentMsg" role="status" aria-live="polite"></div>
   </form>
 
   <div class="card" id="recent">
@@ -280,6 +287,17 @@
 </div>
 
 <script src="/invoice-calculations.js"></script>
+<dialog id="signatureDialog" style="width:min(1000px,96vw);max-height:95vh;border:1px solid #ddd;border-radius:16px;padding:20px" dir="rtl">
+  <div style="display:flex;justify-content:space-between;gap:12px"><h2 id="signatureTitle">העתק החשבונית לחתימה</h2><button type="button" id="closeSignature">סגירה</button></div>
+  <p class="field-note">זהו העתק להחתמת הלקוח. החתימה תתווסף בעמוד נפרד, והמסמך יישמר בנספחי אותה חשבונית בפריוריטי.</p>
+  <iframe id="signaturePdf" title="העתק החשבונית לחתימת הלקוח" style="width:100%;height:40vh;border:1px solid #ddd"></iframe>
+  <p><a id="signatureCopyLink" target="_blank" rel="noopener">פתיחת ההעתק בחלון נפרד</a></p>
+  <label for="signatureName">שם החותם</label><input id="signatureName" maxlength="80" autocomplete="name">
+  <label for="signatureCanvas">חתימת הלקוח על המסך</label>
+  <canvas id="signatureCanvas" width="640" height="180" aria-label="אזור חתימת הלקוח" style="width:100%;max-width:640px;height:auto;border:2px solid #8993a1;border-radius:8px;touch-action:none;background:white"></canvas>
+  <div style="display:flex;gap:10px;margin-top:12px"><button type="button" id="clearSignature">ניקוי חתימה</button><button type="button" id="saveSignature" disabled>שמירת המסמך החתום בנספחים</button></div>
+  <p id="signatureStatus" role="status"></p>
+</dialog>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
@@ -423,7 +441,14 @@ function renderCustDetails(d) {
   info.classList.add('show');
 }
 
+let digitalCustomerRequest=0;
 async function loadCustDetails(custname) {
+  const request=++digitalCustomerRequest;
+  $('digitalStatus').textContent='בודק הגדרת מסמך ממוחשב בפריוריטי…';
+  api('/api/customers/digital?custname='+encodeURIComponent(custname)).then(profile=>{
+    if(request!==digitalCustomerRequest || $('custname').value!==custname)return;
+    $('digitalStatus').textContent=profile.digital ? 'הלקוח מוגדר לקבלת מסמך ממוחשב. המקור יורד ללא מייל.' : 'הלקוח אינו מוגדר כמקבל מסמך ממוחשב בפריוריטי. יש להסדיר זאת לפני ההפקה.';
+  }).catch(err=>{if(request===digitalCustomerRequest)$('digitalStatus').textContent='בדיקת מסמך ממוחשב נכשלה: '+err.message;});
   try {
     renderCustDetails(await api('/api/customers/details?custname=' + encodeURIComponent(custname)));
   } catch (e) {
@@ -861,8 +886,10 @@ function showMsg(cls, html) { msg.className = 'msg show ' + cls; msg.innerHTML =
 
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
-  msg.className = 'msg';
   const btn = $('submit');
+  if (btn.disabled) return;
+  msg.className = 'msg';
+  $('documentMsg').className = 'msg';
   const lines = readLines();
   const missingPrice = lines.findIndex(line => !Number.isFinite(line.price) || line.price <= 0);
   if (missingPrice !== -1) {
@@ -888,6 +915,7 @@ $('form').addEventListener('submit', async e => {
   const details = $('details').value.trim();
   btn.disabled = true; btn.textContent = 'שולח…';
   try {
+    await api('/api/invoices/original-download-preflight',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({custname:$('custname').value})});
     // מניעת כפילויות: אם יש מזהה הזמנה, בודקים שלא קיימת כבר חשבונית עם אותו מזהה
     if (details) {
       const dup = await api('/api/invoices/check?details=' + encodeURIComponent(details));
@@ -902,6 +930,8 @@ $('form').addEventListener('submit', async e => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        requestId: typeof digitalCreationId==='function' ? digitalCreationId() : undefined,
+        originalDownload: true,
         custname: $('custname').value,
         date: $('date').value,
         details,
@@ -914,17 +944,21 @@ $('form').addEventListener('submit', async e => {
         lines,
       }),
     });
+    if(typeof completeDigitalCreation==='function')completeDigitalCreation();
     showMsg('ok',
-      `✔ החשבונית נוצרה בהצלחה!\n<span class="big num-ltr">${data.ivnum}</span> · ${data.status}\n` +
+      `✔ נוצרה טיוטה <span class="big num-ltr">${escapeHtml(data.ivnum)}</span> · סוגר לחשבונית סופית…\n` +
       `לפני מע"מ: ${fmt(data.beforeVat)} · מע"מ: ${fmt(data.vat)} · <b>סה"כ: ${fmt(data.total)}</b>\n` +
-      `<button type="button" class="close-btn" data-iv="${data.ivnum}" style="margin-top:6px">סגירה ל-IN</button>`);
+      '');
     // איפוס שורות לקראת החשבונית הבאה
     tbody.innerHTML = ''; addLine(); $('details').value = ''; recalc();
+    if(data.prepared===false){showMsg('warn','הטיוטה '+escapeHtml(data.ivnum)+' נוצרה, אך פרטי המשלוח לא אומתו: '+escapeHtml(data.preparationError||'')+' — אין להפיק שוב. אפשר לנסות לסגור את אותה טיוטה. <button type="button" class="close-btn" data-iv="'+escapeHtml(data.ivnum)+'">ניסיון סגירה חוזר</button>');return;}
+    btn.textContent = 'סוגר ומכין מקור להורדה…';
+    await closeInvoice(data.ivnum, null, false);
     loadRecent();
   } catch (err) {
     showMsg('err', '✖ ' + err.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'הפקת חשבונית';
+    btn.disabled = false; btn.textContent = 'הפקה, סגירה והורדת מקור';
   }
 });
 
@@ -945,7 +979,7 @@ async function loadRecent() {
         <td class="${r.STATDES === 'טיוטא' ? 'draft' : 'final'}">${r.STATDES || ''}</td>
         <td>${fmt(r.TOTPRICE)}</td>
         <td style="color:var(--muted)">${r.DETAILS || ''}</td>
-        <td style="white-space:nowrap">${r.STATDES === 'טיוטא' ? `<button type="button" class="close-btn" data-iv="${r.IVNUM}">סגירה ל-IN</button> ` : ''}<button type="button" class="close-btn dl-btn" data-iv="${r.IVNUM}" title="הורדת מסמך החשבונית">PDF ⬇</button></td>
+        <td class="invoice-document-actions">${r.STATDES === 'טיוטא' ? `<button type="button" class="close-btn" data-iv="${r.IVNUM}">סגירה ל-IN</button> ` : ''}<button type="button" class="close-btn dl-btn" data-iv="${r.IVNUM}" title="הורדת מסמך החשבונית">העתק PDF ⬇</button>${r.STATDES !== 'טיוטא' ? `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${r.IVNUM}" title="הורדת המקור הקיים מהנספחים, ללא הפקה או מייל">הורדת מקור ⬇</button> <button type="button" class="close-btn sign-btn" data-iv="${r.IVNUM}">פתיחה וחתימה</button>` : ''}</td>
       </tr>`).join('') + '</tbody></table>';
   } catch (e) {
     el.innerHTML = `<span style="color:var(--err)">${e.message}</span>`;
@@ -955,8 +989,9 @@ $('refreshBtn').addEventListener('click', loadRecent);
 loadRecent();
 
 // ---------- סגירת חשבונית (טיוטה -> סופית IN) ----------
-async function closeInvoice(ivnum, btn) {
-  if (!confirm(`לסגור את חשבונית ${ivnum}?\nהחשבונית תהפוך לסופית (מספר IN) — פעולה שאי אפשר לבטל.`)) return;
+async function closeInvoice(ivnum, btn, confirmFirst = true) {
+  if (confirmFirst && !confirm(`לסגור את חשבונית ${ivnum}?\nהחשבונית תהפוך לסופית (מספר IN) — פעולה שאי אפשר לבטל.`)) return;
+  const documentKind = 'copy';
   if (btn) { btn.disabled = true; btn.textContent = 'סוגר…'; }
   try {
     const data = await api('/api/invoices/close', {
@@ -964,52 +999,83 @@ async function closeInvoice(ivnum, btn) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ivnum }),
     });
-    showMsg('ok', `✔ החשבונית נסגרה: <b class="num-ltr">${data.ivnum}</b>${data.status ? ' · ' + data.status : ''}\nה-PDF יורד אוטומטית… <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" style="margin-top:6px">הורדה חוזרת ⬇</button>`);
-    // הורדת המסמך אוטומטית מיד אחרי הסגירה
+    showMsg('ok', `✔ החשבונית נסגרה: <b class="num-ltr">${data.ivnum}</b>${data.status ? ' · ' + data.status : ''}\nמכין את המסמך להורדה… <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="${documentKind}" style="margin-top:6px">הורדה חוזרת ⬇</button> <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="copy">הורדת העתק</button>`);
+    // Digital flow opens a copy and requests native email; the legacy route remains available.
     const autoBtn = msg.querySelector('.dl-btn');
-    if (autoBtn) downloadInvoice(data.ivnum, autoBtn);
+    if(data.originalDownload)await finishOriginalDownload(data);
+    else if(data.digitalEmail)await finishDigitalInvoice(data);
+    else await downloadInvoice(data.ivnum, autoBtn, documentKind);
   } catch (err) {
-    showMsg('err', '✖ סגירת החשבונית נכשלה:\n' + err.message);
+    showMsg('warn', `החשבונית <b class="num-ltr">${escapeHtml(ivnum)}</b> כבר נוצרה, אך הסגירה לא אומתה: ${escapeHtml(err.message)}\nאין להפיק אותה שוב. אפשר לבדוק בפריוריטי או לנסות לסגור את אותה טיוטה.\n<button type="button" class="close-btn" data-iv="${escapeHtml(ivnum)}">ניסיון סגירה חוזר</button>`);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'סגירה ל-IN'; }
     loadRecent();
   }
 }
-async function downloadInvoice(ivnum, btn) {
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = 'מפיק…';
+const pendingDownloads = new Map();
+async function downloadInvoice(ivnum, btn, kind = btn?.dataset?.kind || 'copy') {
+  const key = ivnum + '|' + kind;
+  if (pendingDownloads.has(key)) return pendingDownloads.get(key);
+  const request = fetchInvoiceDocument(ivnum, btn, kind);
+  pendingDownloads.set(key, request);
+  try { return await request; } finally { pendingDownloads.delete(key); }
+}
+async function fetchInvoiceDocument(ivnum, btn, kind) {
+  const orig = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = kind === 'original' ? 'מוריד…' : 'מפיק…'; }
+  const notice = $('documentMsg');
+  notice.className = 'msg show';
+  notice.textContent = 'מכין את המסמך של חשבונית ' + ivnum + ' להורדה…';
   try {
-    const res = await fetch('/api/invoices/document?ivnum=' + encodeURIComponent(ivnum));
+    const res = kind === 'original'
+      ? await fetch('/api/invoices/existing-original?ivnum=' + encodeURIComponent(ivnum))
+      : await fetch('/api/invoices/document?ivnum=' + encodeURIComponent(ivnum));
     const ct = res.headers.get('content-type') || '';
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || 'הפקת המסמך נכשלה');
     }
     if (ct.includes('application/json')) {
-      // השרת החזיר קישור במקום קובץ
       const data = await res.json();
-      if (data.url) { window.open(data.url, '_blank'); return; }
-      throw new Error(data.error || 'לא התקבל מסמך');
+      if (!data.url) throw new Error(data.error || 'לא התקבל מסמך');
+      const url = new URL(data.url, location.href);
+      if (!['https:', 'http:'].includes(url.protocol)) throw new Error('התקבל קישור מסמך לא תקין');
+      notice.className = 'msg show warn';
+      notice.textContent = 'החשבונית ' + ivnum + ' קיימת בפריוריטי. לפתיחת המסמך לחצו כאן: ';
+      const link = document.createElement('a');
+      link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      link.textContent = 'פתיחת מסמך החשבונית'; notice.appendChild(link);
+      return false;
     }
     const blob = await res.blob();
+    if (!blob.size) throw new Error('התקבל קובץ ריק מפריוריטי');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = ivnum + (ct.includes('pdf') ? '.pdf' : '.html');
-    a.click();
-    URL.revokeObjectURL(a.href);
+    a.download = ivnum + (kind === 'original' ? '-original' : '') + (ct.includes('pdf') ? '.pdf' : ct.includes('html') ? '.html' : '.bin');
+    document.body.appendChild(a); a.click(); a.remove();
+    const objectUrl = a.href;
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    notice.className = 'msg show ok';
+    notice.textContent = 'המסמך של חשבונית ' + ivnum + ' נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת.';
+    return true;
   } catch (err) {
-    showMsg('err', '✖ הורדת החשבונית נכשלה:\n' + err.message);
+    notice.className = 'msg show warn';
+    notice.textContent = 'החשבונית ' + ivnum + ' קיימת בפריוריטי, אבל הורדת המסמך נכשלה: ' + err.message + (kind === 'original' ? '. ההורדה קוראת את הנספח הקיים בלבד; לא הופק מקור ולא נשלח מייל. ניתן להוריד העתק בנפרד.' : '. אפשר לנסות שוב דרך כפתור ההורדה; אין צורך להפיק חשבונית נוספת.');
+    return false;
   } finally {
-    btn.disabled = false; btn.textContent = orig;
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
   }
 }
 
 document.addEventListener('click', e => {
   const b = e.target.closest('.close-btn');
   if (!b) return;
-  if (b.classList.contains('dl-btn')) downloadInvoice(b.dataset.iv, b);
+  if (b.classList.contains('sign-btn')) openInvoiceForSigning(b.dataset.iv);
+  else if (b.classList.contains('prepare-original-btn')) finishOriginalDownload({ivnum:b.dataset.iv});
+  else if (b.classList.contains('dl-btn')) downloadInvoice(b.dataset.iv, b);
   else closeInvoice(b.dataset.iv, b);
 });
 </script>
+<script src="/signature.js"></script>
 </body>
 </html>

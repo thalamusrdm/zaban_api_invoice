@@ -1,0 +1,63 @@
+{
+  "status": "DRAFT_NOT_INSTALLED_NOT_VALIDATED",
+  "name": "ZBAN_ORIGINALPDF",
+  "title": "הורדת מקור חשבונית ללא מייל",
+  "sourceDocument": "WWWSHOWAIV",
+  "preserveExistingProcedure": true,
+  "sendEmail": false,
+  "steps": [
+    {
+      "position": 10,
+      "entity": "INPUT",
+      "type": "B",
+      "parameters": [
+        {
+          "name": "PAR",
+          "type": "LINE",
+          "table": "INVOICES",
+          "column": "IV",
+          "title": "חשבונית"
+        }
+      ]
+    },
+    {
+      "position": 20,
+      "entity": "SQLI",
+      "type": "C",
+      "parameters": [
+        {
+          "name": "ADD",
+          "type": "ASCII"
+        }
+      ],
+      "queryFile": "render-draft.sql"
+    },
+    {
+      "position": 30,
+      "entity": "URL",
+      "type": "B",
+      "parameters": [
+        {
+          "name": "ADD",
+          "type": "ASCII"
+        }
+      ]
+    }
+  ],
+  "messages": {
+    "501": "לא נבחרה חשבונית יחידה",
+    "502": "החשבונית אינה חשבונית מס סופית להפקת מקור",
+    "503": "הלקוח אינו מוגדר לקבלת מסמך ממוחשב",
+    "504": "הפקת המסמך נכשלה"
+  },
+  "requiredBeforeActivation": [
+    "Confirm development installation isolation; company selection alone may not isolate procedure definitions",
+    "Syntax check in Priority and verify exact parameter behavior",
+    "Enforce current user invoice access using supported Priority privileges",
+    "Serialize generation for the same invoice and reconcile ambiguous errors without regeneration",
+    "Verify configured e-document signing and digitally signed original output",
+    "Persist the original and its identity through a supported interface; retrieve the same file on repeat download",
+    "Reject an already printed invoice unless its saved original is available",
+    "Only after verification: add original selection alongside existing copy route"
+  ]
+}

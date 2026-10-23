@@ -7,7 +7,7 @@ const { Readable } = require('node:stream');
 const path = require('node:path');
 
 // The real HTTP handler runs with a fake Priority transport and no filesystem writes.
-function isolatedServer(getResponse, responseStatus = 200, sdk = {}) {
+function isolatedServer(getResponse, responseStatus = 200, sdk = {}, store, originals) {
   let handler;
   const calls = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8'), {
@@ -18,6 +18,8 @@ function isolatedServer(getResponse, responseStatus = 200, sdk = {}) {
       if (name === './priority-sdk') return sdk;
       if (name === './invoice-payload') return require('../invoice-payload');
       if (name === './exchange-rates') return require('../exchange-rates');
+      if (name === './original-documents') return originals ? {originalStore:()=>originals} : require('../original-documents');
+      if (name === './digital-invoice') return {...require('../digital-invoice'),workflowStore:directory=>store||require('../digital-invoice').workflowStore(directory)};
       if (name === './gold-rates') return require('../gold-rates');
       return require(name);
     },
@@ -36,10 +38,10 @@ function isolatedServer(getResponse, responseStatus = 200, sdk = {}) {
     async request(method, url, body) {
       const req = Readable.from(body ? [Buffer.from(JSON.stringify(body))] : []);
       Object.assign(req, { method, url });
-      let status, text;
-      const res = { writeHead(code) { status = code; }, end(value) { text = value; } };
+      let status, text, headers;
+      const res = { writeHead(code,values) { status = code; headers=values; }, end(value) { text = value; } };
       await handler(req, res);
-      return { status, body: text && JSON.parse(text) };
+      return { status, headers, buffer:Buffer.isBuffer(text)?text:undefined, body: text && !Buffer.isBuffer(text) ? JSON.parse(text) : undefined };
     },
   };
 }
@@ -188,4 +190,75 @@ test('Priority and BOI routes cache separately without silent source fallback', 
   assert.equal(sdkReads, 1); assert.equal(server.calls.length, 1);
   const invalid = await server.request('GET', '/api/exchange-rates?date=2026-10-20&source=unknown');
   assert.equal(invalid.status, 400); assert.equal(sdkReads, 1);
+});
+
+
+test('close is verified by internal IV and unverified absence never returns success', async () => {
+  for (const found of [true, false]) {
+    let closed=0;
+    const server=isolatedServer(url => url.includes('$filter=') ? { value: found ? [{ IVNUM:'IN-TEST',STATDES:'סופית' }] : [] } : { IV:123,STATDES:'טיוטא' },200,{async closeInvoice(){closed++;return {};}});
+    const result=await server.request('POST','/api/invoices/close',{ivnum:'T-TEST'});
+    assert.equal(closed,1);assert.equal(result.status,found ? 200 : 502);
+    if(found)assert.equal(result.body.ivnum,'IN-TEST');else assert.match(result.body.error,/לא ניתן לאמת/);
+    assert.ok(decodeURIComponent(server.calls[1].url).includes('IV eq 123'));
+  }
+});
+
+test('original route rejects non-API invoices before running any original procedure',async()=>{let calls=0;const s=isolatedServer(()=>({IV:123,OWNERLOGIN:'another-user'}),200,{async getOriginalInvoiceDocument(){calls++;}});const response=await s.request('POST','/api/invoices/original',{ivnum:'IN123'});assert.equal(response.status,400);assert.equal(calls,0);});
+
+test('server rejects original-mode creation for an ineligible customer before any invoice write',async()=>{const s=isolatedServer(undefined,200,{async getOriginalCustomerReadiness(){return {ready:false,reason:'לא מוגדר למסמך ממוחשב'};}});const response=await s.request('POST','/api/invoices',{original:true,custname:'301100',date:'2026-10-22',invoiceType:'1',lines:[{partname:'14',quantity:1,price:10,currency:'USD',exchange:3.11}]});assert.equal(response.status,400);assert.match(response.body.error,/מסמך ממוחשב/);assert.equal(s.calls.length,0);});
+
+async function deliveryFixture(t){const fsp=require('node:fs/promises');const os=require('node:os');const dir=await fsp.mkdtemp(path.join(os.tmpdir(),'invoice-http-digital-'));t.after(()=>fsp.rm(dir,{recursive:true,force:true}));return require('../digital-invoice').workflowStore(dir);}
+const validDigitalBody=()=>({custname:'TEST',date:'2026-10-22',invoiceType:'1',lines:[{partname:'14',quantity:1,price:10,currency:'USD',exchange:3.11}],digitalEmail:true,consent:true,email:'agent@example.com',requestId:'cdf70483-4d40-4320-85c5-4569db7eac51'});
+test('digital creation retries reuse one draft and reject changing the payload under its request ID',async t=>{const store=await deliveryFixture(t);let created=0,prepared=0;const server=isolatedServer((_url,options)=>{if(options.method==='POST'){created++;return {IV:123,IVNUM:'T123',STATDES:'טיוטא'};}throw Error('Unexpected transport');},200,{async prepareDigitalCustomer(custname,email){prepared++;return {custname,email};},async prepareDigitalInvoice(){}},store);const body=validDigitalBody();const result=await Promise.all([server.request('POST','/api/invoices',body),server.request('POST','/api/invoices',body)]);assert.equal(result[0].status,200);assert.equal(result[1].body.ivnum,'T123');assert.equal(created,1);assert.equal(prepared,1);const changed=await server.request('POST','/api/invoices',{...body,email:'other@example.com'});assert.equal(changed.status,400);assert.equal(created,1);});
+test('mail retries cannot send twice or change the saved recipient',async t=>{const store=await deliveryFixture(t);const d=require('../digital-invoice');const key=d.keyFor('http://priority.invalid/odata/config/test-only',123);await store.write(key,'context',{digitalEmail:true,custname:'TEST',email:'agent@example.com'});let mails=0;const server=isolatedServer(()=>({IV:123,IVNUM:'IN123',CUSTNAME:'TEST',OWNERLOGIN:'fake-user'}),200,{async sendDigitalInvoice(ivnum,email){mails++;return {ivnum,email,acceptedByPriority:true};}},store);const body={ivnum:'IN123',digitalEmail:true,consent:true,email:'agent@example.com'};assert.equal((await server.request('POST','/api/invoices/email',body)).status,200);assert.equal((await server.request('POST','/api/invoices/email',body)).status,200);assert.equal(mails,1);assert.equal((await server.request('POST','/api/invoices/email',{...body,email:'other@example.com'})).status,400);assert.equal(mails,1);});
+test('signed copy is attached to its own invoice once; another invoice cannot use its token',async t=>{const store=await deliveryFixture(t);const {PDFDocument}=require('pdf-lib');const {PNG}=require('pngjs');const fixture=await PDFDocument.create();fixture.addPage().drawText('TEST COPY IN123');const bytes=Buffer.from(await fixture.save());const png=new PNG({width:640,height:180});png.data.fill(255);for(let x=30;x<500;x++)for(let y=80;y<84;y++){const i=(640*y+x)*4;png.data[i]=png.data[i+1]=png.data[i+2]=20;}const signature='data:image/png;base64,'+PNG.sync.write(png).toString('base64');let uploads=0,descriptor;let uploaded;
+const server=isolatedServer((url,options)=>{if(url.includes('EXTFILES_SUBFORM')){if(options.method==='POST'){uploads++;const payload=JSON.parse(options.body);descriptor=payload.EXTFILEDES;uploaded=Buffer.from(payload.EXTFILENAME.split(',')[1],'base64');return {EXTFILENUM:77};}return {value:descriptor?[{EXTFILENUM:77,EXTFILEDES:descriptor}]:[]};}return {IV:url.includes('IN124')?124:123,IVNUM:url.includes('IN124')?'IN124':'IN123',CUSTNAME:'TEST',OWNERLOGIN:'fake-user'};},200,{async getInvoiceDocumentUrl(){return {datauri:'data:application/pdf;base64,'+bytes.toString('base64')};}},store);
+const copy=await server.request('GET','/api/invoices/signature-copy?ivnum=IN123');assert.equal(copy.status,200);assert.deepEqual(copy.buffer,bytes);const token=copy.headers['X-Signature-Token'];const body={ivnum:'IN123',token,signer:'בדיקה',signature};assert.equal((await server.request('POST','/api/invoices/sign',{...body,ivnum:'IN124'})).status,400);assert.equal(uploads,0);assert.equal((await server.request('POST','/api/invoices/sign',body)).status,200);assert.equal((await server.request('POST','/api/invoices/sign',body)).status,200);assert.equal(uploads,1);assert.equal((await PDFDocument.load(uploaded)).getPageCount(),2);assert.match(descriptor,/IN123/);});
+
+test('existing original download returns the exact attachment bytes using GETs only',async()=>{
+  const bytes=Buffer.from('%PDF-1.7\nexisting signed original /ByteRange [0 1 2 3]');
+  const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:[{EXTFILENUM:1,EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:'data:application/pdf;base64,'+bytes.toString('base64')},{EXTFILENUM:2,EXTFILEDES:'SIGNED_IN123_x',EXTFILENAME:'data:application/pdf;base64,'+Buffer.from('signed copy').toString('base64')}]}:{IV:123,OWNERLOGIN:'fake-user'});
+  for(let i=0;i<2;i++){const result=await server.request('GET','/api/invoices/existing-original?ivnum=IN123');assert.equal(result.status,200);assert.deepEqual(result.buffer,bytes);assert.match(result.headers['Content-Disposition'],/IN123-original.pdf/);}
+  assert.equal(server.calls.length,4);assert.ok(server.calls.every(x=>x.method==='GET'));
+});
+test('existing original never generates a replacement for missing, ambiguous or invalid originals',async()=>{
+  const pdf='data:application/pdf;base64,'+Buffer.from('%PDF-1.7 /ByteRange').toString('base64');
+  for(const rows of [[],[{EXTFILEDES:'SIGNED_IN123_x',EXTFILENAME:pdf}],[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:pdf},{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:pdf}],[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:'data:application/pdf;base64,YmFk'}],[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:'https://other.invalid/original.pdf'}]]){
+    const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:rows}:{IV:123,OWNERLOGIN:'fake-user'});
+    const result=await server.request('GET','/api/invoices/existing-original?ivnum=IN123');assert.ok(result.status>=400);assert.ok(server.calls.every(x=>x.method==='GET'));assert.equal(server.calls.length,2);
+  }
+});
+test('existing original download rejects other users and draft identifiers before reading attachments',async()=>{
+  const server=isolatedServer(()=>({IV:123,OWNERLOGIN:'other-user'}));
+  assert.equal((await server.request('GET','/api/invoices/existing-original?ivnum=T123')).status,400);assert.equal(server.calls.length,0);
+  assert.equal((await server.request('GET','/api/invoices/existing-original?ivnum=IN123')).status,400);assert.equal(server.calls.length,1);
+});
+
+test('no-email creation requires a digital customer, ignores missing email and creates one draft',async t=>{
+  const store=await deliveryFixture(t);let created=0;const sdk={async digitalCustomerForm(){return {name:'TEST',digital:true,email:'',requiredMissing:[]};}};
+  const server=isolatedServer((_u,o)=>{assert.equal(o.method,'POST');created++;return {IV:123,IVNUM:'T123'};},200,sdk,store);
+  const {email,consent,digitalEmail,...body}=validDigitalBody();body.originalDownload=true;
+  await Promise.all([server.request('POST','/api/invoices',body),server.request('POST','/api/invoices',body)]).then(results=>results.forEach(x=>assert.equal(x.status,200)));
+  assert.equal(created,1);const d=require('../digital-invoice');const context=await store.read(d.keyFor('http://priority.invalid/odata/config/test-only',123));assert.equal(context.originalDownload,true);assert.equal(context.digitalEmail,undefined);
+  const blocked=isolatedServer(()=>{throw Error('must not create');},200,{async digitalCustomerForm(){return {name:'TEST',digital:false};}},store);assert.equal((await blocked.request('POST','/api/invoices',body)).status,400);assert.equal(blocked.calls.length,0);
+});
+test('original preparation reuses an existing original with no generation, mail or attachment write',async()=>{
+  const pdf='data:application/pdf;base64,'+Buffer.from('%PDF-1.7 /ByteRange').toString('base64');
+  const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:pdf}]}:{IV:123,OWNERLOGIN:'fake-user',CUSTNAME:'TEST'});
+  assert.equal((await server.request('POST','/api/invoices/prepare-original-download',{ivnum:'IN123'})).status,200);assert.ok(server.calls.every(x=>x.method==='GET'));
+});
+test('no-email original is generated once, saved unchanged and verified in attachments',async t=>{
+  const store=await deliveryFixture(t);const d=require('../digital-invoice');const key=d.keyFor('http://priority.invalid/odata/config/test-only',123);await store.write(key,'context',{originalDownload:true,custname:'TEST'});
+  const bytes=Buffer.from('%PDF-1.7 /ByteRange [0 1 2 3] exact original');let stored=null,prints=0,uploads=0;
+  const server=isolatedServer((url,o)=>{if(url.includes('EXTFILES_SUBFORM')){if(o.method==='POST'){uploads++;const body=JSON.parse(o.body);stored=body;return {EXTFILENUM:1};}return {value:stored?[stored]:[]};}return {IV:123,OWNERLOGIN:'fake-user',CUSTNAME:'TEST'};},200,{async getOriginalInvoiceDocument(){prints++;return {datauri:'data:application/pdf;base64,'+bytes.toString('base64')};}},store,(_key,produce,download)=>produce().then(download));
+  assert.equal((await server.request('POST','/api/invoices/prepare-original-download',{ivnum:'IN123'})).status,200);
+  assert.equal((await server.request('POST','/api/invoices/prepare-original-download',{ivnum:'IN123'})).status,200);
+  assert.equal(prints,1);assert.equal(uploads,1);const result=await server.request('GET','/api/invoices/existing-original?ivnum=IN123');assert.deepEqual(result.buffer,bytes);
+  assert.ok(server.calls.filter(x=>x.method==='POST').every(x=>x.url.includes('EXTFILES_SUBFORM')));
+});
+test('ambiguous no-email generation is never retried automatically',async t=>{
+  const store=await deliveryFixture(t);const d=require('../digital-invoice');await store.write(d.keyFor('http://priority.invalid/odata/config/test-only',123),'context',{originalDownload:true,custname:'TEST'});let prints=0;
+  const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:[]}:{IV:123,OWNERLOGIN:'fake-user',CUSTNAME:'TEST'},200,{async getOriginalInvoiceDocument(){prints++;throw Error('timeout after generation');}},store,(_key,produce,download)=>produce().then(download));
+  for(let i=0;i<2;i++)assert.ok((await server.request('POST','/api/invoices/prepare-original-download',{ivnum:'IN123'})).status>=400);assert.equal(prints,1);assert.ok(server.calls.every(x=>x.method==='GET'));
 });

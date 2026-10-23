@@ -19,3 +19,9 @@ Thumbs.db
 # ארכיונים שעלולים להכיל .env
 zaban_api_env.zip
 *.zip
+
+# Private original invoices and generation intents
+data/originals/
+
+# Private digital delivery and signed invoice copies
+data/delivery/

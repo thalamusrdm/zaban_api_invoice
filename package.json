@@ -1,7 +1,7 @@
 {
   "name": "test-api",
   "version": "1.0.0",
-  "description": "ממשק לוקאלי קל להפקת חשבוניות מס (טיוטות) ב-Priority דרך ה-OData API. אפס תלויות — דורש רק Node.js 18 ומעלה.",
+  "description": "ממשק חשבוניות Priority: משלוח מקור במייל, חתימת לקוח וצירוף העתק חתום.",
   "main": "server.js",
   "scripts": {
     "test": "node --test",
@@ -11,6 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pngjs": "^7.0.0",
     "priority-web-sdk": "^3.0.39"
   }
 }
