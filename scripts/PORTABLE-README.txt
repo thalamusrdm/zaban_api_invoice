@@ -17,7 +17,11 @@ The launcher runs the server directly in the visible CMD window.
 UPDATING AN EXISTING SERVER:
 Close its old server window first. Extract this release into a NEW folder,
 copy the server's existing .env there to preserve its connection settings,
-then run the new start-server.bat. Keep the old folder for rollback.
+and copy its entire data folder (including originals and delivery) into the
+new folder BEFORE starting. These records prevent duplicate originals,
+emails and signed attachments. Do not replace server data with test data
+from another computer. Then run start-server.bat. Keep the old folder
+for rollback.
 No change to the existing firewall rules is required for the same port.
 The server still needs network access to Priority and Bank of Israel.
 

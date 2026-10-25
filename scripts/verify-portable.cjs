@@ -9,6 +9,24 @@ const assert = require('node:assert/strict');
   const root = path.resolve(process.argv[2]);
   assert.ok(fs.existsSync(path.join(root, 'runtime/node.exe')));
   assert.ok(fs.existsSync(path.join(root, '.env')));
+  // Exercise the actual bundled renderer and PDF parser without any ERP writes.
+  const smoke = `
+    const fs=require('fs');const assert=require('assert/strict');
+    const {PDFDocument,StandardFonts}=require('pdf-lib');const fontkit=require('@pdf-lib/fontkit');const {PNG}=require('pngjs');
+    (async()=>{
+      const doc=await PDFDocument.create();doc.registerFontkit(fontkit);const page=doc.addPage([595,842]);
+      const hebrew=await doc.embedFont(fs.readFileSync('public/fonts/NotoSansHebrew-Regular.ttf'),{subset:true});const latin=await doc.embedFont(StandardFonts.Helvetica);
+      page.drawText('_______________',{x:313.4,y:377.7,size:7.55,font:latin});page.drawText('חתימת הלקוח',{x:385.2,y:377.7,size:7.55,font:hebrew});
+      page.drawText('__________________________',{x:435.1,y:377.7,size:7.55,font:latin});page.drawText('שם הלקוח',{x:551.1,y:377.7,size:7.55,font:hebrew});
+      const copy=Buffer.from(await doc.save());const png=new PNG({width:640,height:180});png.data.fill(255);
+      for(let x=40;x<500;x++)for(let y=80;y<84;y++){const i=(y*640+x)*4;png.data[i]=png.data[i+1]=png.data[i+2]=20;}
+      const result=await require('./digital-invoice').signedCopy(copy,PNG.sync.write(png),{ivnum:'IN123',custname:'301100',signer:'בדיקה',signedAt:'2026-10-25T10:00:00Z'});
+      const signed=await PDFDocument.load(result);assert.equal(signed.getPageCount(),1);assert.equal(signed.getTitle(),'העתק חשבונית חתום IN123');
+      console.log('PASS: bundled Node, PDF parser, Hebrew font and printed-field signature rendering.');
+    })().catch(e=>{console.error(e.message);process.exitCode=1;});
+  `;
+  const smokeOutput=execFileSync(path.join(root,'runtime/node.exe'),['-e',smoke],{cwd:root,env:{...process.env,PATH:path.join(process.env.SystemRoot,'System32'),NODE_PATH:'',NODE_OPTIONS:''},windowsHide:true,timeout:30000,encoding:'utf8'});
+  console.log(smokeOutput.trim());
   const reservation = net.createServer();
   await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
   const port = reservation.address().port;
