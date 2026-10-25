@@ -3,6 +3,9 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const fontkit = require('@pdf-lib/fontkit');
+const bidi = require('bidi-js')();
+const { signatureFields } = require('./signature-fields');
 const { PNG } = require('pngjs');
 function inputError(message){return Object.assign(new Error(message),{status:400});}
 function emailAddress(value) {
@@ -52,17 +55,47 @@ function signatureImage(datauri) {
   if(ink<30) throw inputError('יש לחתום על המסך לפני השמירה');
   return buffer;
 }
+// Fill the name and signature lines already printed on the invoice copy.
 async function signedCopy(copy, png, {ivnum,custname,signer,signedAt}) {
-  if(!/^IN[0-9]+$/.test(ivnum) || !custname || typeof signer!=='string' || !signer.trim() || signer.length>80 || /[\x00-\x1f]/.test(signer)) throw inputError('חסרים פרטי החותם או החשבונית');
+  if(!/^IN[0-9]+$/.test(ivnum) || !custname || typeof signer!=='string' || !signer.trim() || signer.length>80 || /[\x00-\x1f\u202a-\u202e\u2066-\u2069]/.test(signer) || !Number.isFinite(Date.parse(signedAt))) throw inputError('חסרים פרטי החותם או החשבונית');
+  const fields=await signatureFields(copy);
   const doc=await PDFDocument.load(copy);
-  const page=doc.addPage([595,300]);
-  const font=await doc.embedFont(StandardFonts.Helvetica);
+  const page=doc.getPage(fields.pageIndex);
+  doc.registerFontkit(fontkit);
+  const hebrew=await doc.embedFont(await fs.readFile(path.join(__dirname,'public','fonts','NotoSansHebrew-Regular.ttf')),{subset:true});
+  const latin=await doc.embedFont(StandardFonts.Helvetica);
+  const supportedHebrew=new Set(hebrew.getCharacterSet()),supportedLatin=new Set(latin.getCharacterSet());
+  function drawRtl(text,right,y,size,maxWidth) {
+    // Unicode BiDi handles numbers and mixed names. Draw visual glyphs individually
+    // so fontkit does not reverse an already reordered Hebrew run a second time.
+    const visual=bidi.getReorderedString(text,bidi.getEmbeddingLevels(text,'rtl'));
+    const glyphs=Array.from(visual).map(char=>{const cp=char.codePointAt(0);const font=supportedHebrew.has(cp)?hebrew:supportedLatin.has(cp)?latin:null;if(!font)throw inputError('שם החותם מכיל תו שאינו נתמך במסמך');return {char,font};});
+    const nominal=glyphs.reduce((sum,g)=>sum+g.font.widthOfTextAtSize(g.char,size),0);
+    const actual=Math.min(size,nominal>0?size*maxWidth/nominal:size);
+    if(actual<7)throw inputError('שם החותם ארוך מדי לשדה שבחשבונית');
+    let x=right-glyphs.reduce((sum,g)=>sum+g.font.widthOfTextAtSize(g.char,actual),0);
+    for(const g of glyphs){page.drawText(g.char,{x,y,size:actual,font:g.font,color:rgb(.1,.15,.2)});x+=g.font.widthOfTextAtSize(g.char,actual);}
+  }
+  const name=fields.name,signature=fields.signature;
+  drawRtl(signer.trim(),name.x+name.width-3,name.y+3,10,name.width-6);
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('he-IL',{timeZone:'Asia/Jerusalem',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(signedAt)).map(x=>[x.type,x.value]));
+  drawRtl('נחתם בתאריך '+parts.day+'/'+parts.month+'/'+parts.year+' בשעה '+parts.hour+':'+parts.minute+' (שעון ישראל)',name.x+name.width,name.y-24,7.5,name.x+name.width-signature.x);
+  // Crop the empty canvas and make its white background transparent so the
+  // printed signature line stays visible beneath the handwriting.
+  const ink=PNG.sync.read(png);let minX=ink.width,minY=ink.height,maxX=-1,maxY=-1;
+  for(let y=0;y<ink.height;y++)for(let x=0;x<ink.width;x++){const i=(y*ink.width+x)*4;if(ink.data[i+3]>40&&Math.min(ink.data[i],ink.data[i+1],ink.data[i+2])<220){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}}
+  if(maxX<minX)throw inputError('יש לחתום על המסך לפני השמירה');
+  minX=Math.max(0,minX-2);minY=Math.max(0,minY-2);maxX=Math.min(ink.width-1,maxX+2);maxY=Math.min(ink.height-1,maxY+2);
+  const cropped=new PNG({width:maxX-minX+1,height:maxY-minY+1});
+  for(let y=0;y<cropped.height;y++)for(let x=0;x<cropped.width;x++){const src=((minY+y)*ink.width+minX+x)*4,dst=(y*cropped.width+x)*4;ink.data.copy(cropped.data,dst,src,src+4);if(Math.min(ink.data[src],ink.data[src+1],ink.data[src+2])>245)cropped.data[dst+3]=0;}
+  const image=await doc.embedPng(PNG.sync.write(cropped));
+  const scaled=image.scaleToFit(signature.width-4,25);
+  page.drawImage(image,{x:signature.x+(signature.width-scaled.width)/2,y:signature.y-7,width:scaled.width,height:scaled.height});
   const digest=createHash('sha256').update(copy).digest('hex');
-  page.drawText('Customer signature on invoice copy',{x:35,y:265,size:16,font,color:rgb(.1,.15,.2)});
-  for(const [i,text]of ['Invoice: '+ivnum,'Customer: '+String(custname).replace(/[^\x20-\x7e]/g,''),'Signed at: '+signedAt,'Copy SHA-256: '+digest.slice(0,32),digest.slice(32)].entries()) page.drawText(text,{x:35,y:240-i*17,size:10,font});
-  const image=await doc.embedPng(png); const scaled=image.scaleToFit(490,115);
-  page.drawImage(image,{x:35,y:25,width:scaled.width,height:scaled.height});
-  doc.setTitle('Signed copy '+ivnum);doc.setSubject('Customer signature: '+signer.trim());
+  doc.setTitle('העתק חשבונית חתום '+ivnum);
+  doc.setSubject('חתימת לקוח: '+signer.trim());
+  doc.setKeywords(['העתק חתום','מזהה העתק: '+digest]);
   return Buffer.from(await doc.save());
 }
+
 module.exports={emailAddress,digitalConsent,keyFor,workflowStore,signatureImage,signedCopy};

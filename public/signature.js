@@ -6,17 +6,32 @@ const emailPending=new Set();
 const signatureCanvas=document.getElementById('signatureCanvas');
 const signatureContext=signatureCanvas.getContext('2d');
 function clearInvoiceSignature(){signatureContext.fillStyle='white';signatureContext.fillRect(0,0,signatureCanvas.width,signatureCanvas.height);signaturePoints=0;signatureDrawing=false;}
-function updateSignatureButton(){document.getElementById('saveSignature').disabled=!signingState || signingState.saving || signingState.saved || emailPending.has(signingState.ivnum);}
+function updateSignatureButton(){
+  const state=signingState;
+  const pending=state && emailPending.has(state.ivnum);
+  const button=document.getElementById('saveSignature');
+  button.disabled=!state || state.saving || state.saved || pending;
+  button.textContent=state?.saved?'המסמך נשמר':state?.saving?'שומר את המסמך…':!state?'ממתינים לטעינת ההעתק…':'שמירת המסמך החתום בנספחים';
+  document.getElementById('clearSignature').disabled=!state || state.saving || state.saved;
+  document.getElementById('signatureName').readOnly=Boolean(!state || state.saving || state.saved);
+  document.getElementById('closeSignature').disabled=Boolean(state?.saving);
+  signatureCanvas.setAttribute('aria-disabled',String(!state || state.saving || state.saved));
+}
 async function openInvoiceForSigning(ivnum){
   const request=++signatureLoad;
   const dialog=document.getElementById('signatureDialog');
+  const waitingForCopy=typeof InvoiceProgress!=='undefined' && InvoiceProgress.isOpen();
+  if(waitingForCopy)InvoiceProgress.update('signature');
   if(signingState?.url)URL.revokeObjectURL(signingState.url);
   signingState=null;clearInvoiceSignature();updateSignatureButton();
   document.getElementById('signatureName').value='';document.getElementById('signaturePdf').src='about:blank';
   document.getElementById('signatureCopyLink').removeAttribute('href');
   document.getElementById('signatureTitle').textContent='העתק חשבונית '+ivnum+' לחתימה';
   document.getElementById('signatureStatus').textContent='טוען את העתק החשבונית…';
-  if(!dialog.open)dialog.showModal();
+  if(!waitingForCopy){
+    if(typeof showSignatureFlow==='function')showSignatureFlow(ivnum);
+    else if(!dialog.open)dialog.showModal();
+  }
   try{
     const response=await fetch('/api/invoices/signature-copy?ivnum='+encodeURIComponent(ivnum));
     if(!response.ok){const error=await response.json();throw Error(error.error||'טעינת ההעתק נכשלה');}
@@ -29,8 +44,16 @@ async function openInvoiceForSigning(ivnum){
     document.getElementById('signatureStatus').textContent='יש לעיין בהעתק, להזין את שם החותם ולחתום על המסך.';
     updateSignatureButton();return true;
   }catch(e){if(request===signatureLoad)document.getElementById('signatureStatus').textContent=e.message+' — החשבונית קיימת ואין להפיק אותה שוב.';return false;}
+  finally{
+    if(waitingForCopy && request===signatureLoad){
+      InvoiceProgress.hide();
+      if(typeof showSignatureFlow==='function')showSignatureFlow(ivnum);
+      else if(!dialog.open)dialog.showModal();
+    }
+  }
 }
 async function finishOriginalDownload(data){
+  if(typeof InvoiceProgress!=='undefined')InvoiceProgress.update('original');
   const notice=document.getElementById('documentMsg');
   notice.className='msg show';notice.textContent='מכין את מקור החשבונית '+data.ivnum+' לשמירה בנספחים ולהורדה ללא מייל…';
   try{
@@ -53,19 +76,34 @@ async function finishDigitalInvoice(data){
   finally{emailPending.delete(data.ivnum);await openInvoiceForSigning(data.ivnum);updateSignatureButton();}
 }
 function signaturePosition(event){const r=signatureCanvas.getBoundingClientRect();return {x:(event.clientX-r.left)*signatureCanvas.width/r.width,y:(event.clientY-r.top)*signatureCanvas.height/r.height};}
-signatureCanvas.addEventListener('pointerdown',e=>{if(!signingState || signingState.saving)return;e.preventDefault();signatureCanvas.setPointerCapture(e.pointerId);const p=signaturePosition(e);signatureContext.beginPath();signatureContext.moveTo(p.x,p.y);signatureContext.strokeStyle='#172033';signatureContext.lineWidth=2.5;signatureContext.lineCap='round';signatureDrawing=true;});
+signatureCanvas.addEventListener('pointerdown',e=>{if(!signingState || signingState.saving || signingState.saved)return;e.preventDefault();signatureCanvas.setPointerCapture(e.pointerId);const p=signaturePosition(e);signatureContext.beginPath();signatureContext.moveTo(p.x,p.y);signatureContext.strokeStyle='#172033';signatureContext.lineWidth=2.5;signatureContext.lineCap='round';signatureDrawing=true;});
 signatureCanvas.addEventListener('pointermove',e=>{if(!signatureDrawing)return;e.preventDefault();const p=signaturePosition(e);signatureContext.lineTo(p.x,p.y);signatureContext.stroke();signaturePoints++;});
 for(const event of ['pointerup','pointercancel'])signatureCanvas.addEventListener(event,()=>{signatureDrawing=false;});
-document.getElementById('clearSignature').addEventListener('click',()=>{if(!signingState?.saving)clearInvoiceSignature();});
-document.getElementById('closeSignature').addEventListener('click',()=>document.getElementById('signatureDialog').close());
+document.getElementById('clearSignature').addEventListener('click',()=>{if(!signingState?.saving && !signingState?.saved)clearInvoiceSignature();});
+document.getElementById('closeSignature').addEventListener('click',()=>{
+  if(signingState?.saving)return;
+  if(signingState && !signingState.saved && !confirm('החתימה עדיין לא נשמרה. לעבור לחשבונית נוספת?'))return;
+  signatureLoad++;
+  if(typeof resetInvoiceFlow==='function'){
+    resetInvoiceFlow();
+    document.getElementById('msg').className='msg';
+    document.getElementById('documentMsg').className='msg';
+  }
+});
 document.getElementById('saveSignature').addEventListener('click',async()=>{
-  const state=signingState;if(!state || state.saving)return;
+  const state=signingState;if(!state || state.saving || state.saved)return;
   const signer=document.getElementById('signatureName').value.trim();const status=document.getElementById('signatureStatus');
   if(!signer){status.textContent='יש להזין את שם החותם';return;}if(signaturePoints<2){status.textContent='יש לחתום על המסך לפני השמירה';return;}
   state.saving=true;updateSignatureButton();status.textContent='שומר את ההעתק החתום בנספחי החשבונית '+state.ivnum+'…';
   try{
     const result=await api('/api/invoices/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ivnum:state.ivnum,token:state.token,signer,signature:signatureCanvas.toDataURL('image/png')})});
-    if(signingState===state){state.saved=true;status.textContent='המסמך החתום נשמר ואומת בנספחי חשבונית '+result.ivnum+'.';document.getElementById('saveSignature').disabled=true;}
+    if(result.attached!==true || result.ivnum!==state.ivnum)throw Error('לא התקבל אישור שמירה לחשבונית המבוקשת');
+    if(signingState===state){
+      state.saved=true;
+      status.textContent='המסמך החתום נשמר ואומת בנספחי חשבונית '+result.ivnum+'.';
+      document.getElementById('saveSignature').disabled=true;
+      if(typeof completeSignatureFlow==='function')completeSignatureFlow(result.ivnum);
+    }
   }catch(e){if(signingState===state)status.textContent='שמירת החתימה לא אומתה: '+e.message+'. החתימה נשארה על המסך; אין להפיק חשבונית נוספת.';}
   finally{state.saving=false;if(signingState===state)updateSignatureButton();}
 });

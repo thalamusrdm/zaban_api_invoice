@@ -160,6 +160,7 @@
   .invoice-heading p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
   @media (max-width: 700px) { .type-picker { padding-top: 8px; } .type-choices { grid-template-columns: 1fr; gap: 12px; margin-top: 20px; } .type-choice { min-height: 100px; padding: 16px; display: grid; grid-template-columns: 40px 1fr; gap: 6px 16px; align-items: center; } .type-choice svg { grid-row: 1 / 3; } .type-choice strong { font-size: 19px; } .type-choice .choice-next { grid-column: 2; } .invoice-heading { align-items: flex-start; flex-wrap: wrap; } }
 </style>
+<link rel="stylesheet" href="/invoice-flow.css">
 </head>
 <body>
 <div class="wrap">
@@ -169,9 +170,12 @@
   </header>
 
   <section class="type-picker" id="typePicker" aria-labelledby="typePickerTitle">
-    <span class="eyebrow">חשבונית חדשה</span>
-    <h2 id="typePickerTitle" tabindex="-1">איזו חשבונית נרצה להפיק?</h2>
-    <p>בחרו את סוג החשבונית כדי לפתוח את הטופס המתאים.</p>
+    <div id="completionNotice" class="completion-notice" role="status" aria-live="polite" hidden>
+      <h3 id="completionTitle" tabindex="-1">תודה! החתימה נשמרה</h3>
+      <p id="completionDetails"></p>
+    </div>
+    <h2 id="typePickerTitle" tabindex="-1">איזו חשבונית להפיק?</h2>
+    <p>בוחרים סוג, מוסיפים לקוח ומוצרים, ומפיקים.</p>
     <div class="type-choices">
       <button type="button" class="type-choice" data-type="1" style="--choice-color:#b8860b">
         <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M10 14h20l6 17H4zM10 14l5-6h10l5 6M4 31h32M14 20h12"/></svg>
@@ -190,10 +194,19 @@
 
   <section id="invoiceScreen" hidden aria-labelledby="selectedTypeTitle">
   <div class="invoice-heading">
-    <div><h2 id="selectedTypeTitle" tabindex="-1"></h2><p id="selectedTypeNote"></p></div>
+    <div><h2 id="selectedTypeTitle" tabindex="-1"></h2></div>
     <button type="button" class="mini-btn" id="changeType">החלפת סוג חשבונית</button>
   </div>
   <form class="card" id="form" autocomplete="off">
+    <nav class="flow-steps" aria-label="שלבי הפקת חשבונית">
+      <button type="button" data-step="0" aria-current="step"><span>1</span>לקוח</button>
+      <button type="button" data-step="1"><span>2</span>מוצרים</button>
+      <button type="button" data-step="2"><span>3</span>בדיקה והפקה</button>
+      <button type="button" data-step="3" disabled><span>4</span>חתימת לקוח</button>
+    </nav>
+    <section class="flow-panel" id="customerStep" aria-labelledby="customerStepTitle">
+    <h2 id="customerStepTitle" tabindex="-1">למי החשבונית?</h2>
+    <p class="step-intro">בחרו לקוח ותאריך כדי להתחיל.</p>
     <div class="grid">
       <div class="cust">
         <label for="custSearch">לקוח (שם או מספר)</label>
@@ -202,7 +215,7 @@
         <div id="custChosen"></div>
         <input type="hidden" id="custname">
         <div id="custInfo">
-          <h4><span>נתוני חברה (לחשבוניות ישראל / מספר הקצאה)</span><button type="button" class="mini-btn" id="custEditBtn">עריכה</button></h4>
+          <h4><span>פרטי לקוח ומספר הקצאה</span><button type="button" class="mini-btn" id="custEditBtn">עריכה</button></h4>
           <div class="rows" id="custRows"></div>
           <div id="custAlloc"></div>
           <div id="custEdit">
@@ -230,15 +243,15 @@
       <div>
         <label for="date">תאריך חשבונית</label>
         <input type="date" id="date" required>
-        <label style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--text)"><input type="checkbox" id="useBoiRates" checked style="width:auto">השתמש בשער דולר מבנק ישראל</label>
-        <p class="field-note">ללא סימון: שער מפריוריטי לפי מטבע המוצר (USD או $).</p>
-        <p class="field-note" id="exchangeStatus" role="status">טוען שער דולר מבנק ישראל…</p>
       </div>
     </div>
     <div style="margin-top:14px">
-      <label for="details">פרטים / מזהה הזמנה (מומלץ — משמש למניעת כפילויות)</label>
+      <label for="details">מזהה הזמנה או פרטים</label>
       <input id="details" maxlength="24" placeholder='למשל: הזמנה 1234'>
+      <p class="field-note">מומלץ למלא כדי למנוע חשבונית כפולה.</p>
     </div>
+    <details class="optional-fields">
+    <summary>פרטים נוספים <span>מחסן, סוכן וחשבונית פנקס</span></summary>
     <div class="invoice-fields">
       <div hidden><label for="invoiceType">סוג חשבונית</label><select id="invoiceType" required>
         <option value="1">זהב</option><option value="2">יהלומים</option><option value="4">תכשיטים בשיבוץ יהלומי מעבדה</option>
@@ -247,12 +260,14 @@
       <div><label for="location">איתור במחסן</label><input id="location" maxlength="14" placeholder="ברירת המחדל בפריוריטי"></div>
       <div><label for="agent">סוכן</label><input id="agent" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי"><datalist id="agentOptions"></datalist></div>
       <div><label for="booknum">חשבונית פנקס</label><input id="booknum" maxlength="48" placeholder="לא חובה"></div>
-      <div><label for="discount">ברירת מחדל להנחת שורה (%)</label><input id="discount" type="number" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote"><p class="field-note" id="discountNote">ממלאת שורות שטרם נערכו ושורות חדשות. הנחה שנערכה בשורה נשמרת, ואין הנחה נוספת על הסכום הכולל.</p></div>
     </div>
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
-    <h2 class="section-caption">פירוט החשבונית</h2>
+    </details>
+    </section>
+    <section class="flow-panel" id="productsStep" aria-labelledby="productsStepTitle" hidden>
+    <h2 id="productsStepTitle" tabindex="-1">מה מוסיפים לחשבונית?</h2>
+    <p class="step-intro">בחרו מוצר והזינו כמות. המחיר והשער מתמלאים אוטומטית.</p>
     <p class="field-note" id="goldStatus" role="status" hidden></p>
-    <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה: למק״טי זהב 14, 18 ו־F מלוג מחירי הזהב, ולשאר המוצרים ממחירון הבסיס. שער הדולר מתמלא לפי המקור שנבחר. המחיר והשער נעולים לעריכה.</p>
     <div class="table-scroll" role="region" aria-label="שורות החשבונית" tabindex="0">
     <table id="lines">
       <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col">מחיר ($)</th><th scope="col" hidden>מטבע מחיר</th><th scope="col">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
@@ -260,43 +275,74 @@
     </table>
     </div>
     <button type="button" class="addline" id="addLine">+ הוספת שורה</button>
-
+    <details class="optional-fields">
+      <summary>הנחות ושער דולר <span>הגדרות ומקור המחירים</span></summary>
+      <div class="pricing-settings">
+        <div><label for="discount">הנחה לשורות (%)</label><input id="discount" type="number" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote"><p class="field-note" id="discountNote">חלה על שורות חדשות ושורות שלא שיניתם בהן הנחה. אין הנחה נוספת על הסכום הכולל.</p></div>
+        <div><label class="checkbox-label"><input type="checkbox" id="useBoiRates" checked>שער דולר מבנק ישראל</label><p class="field-note">ללא סימון: שער מפריוריטי לפי מטבע המוצר (USD או $).</p><p class="field-note" id="exchangeStatus" role="status">טוען שער דולר מבנק ישראל…</p></div>
+      </div>
+      <p class="field-note" id="selectedTypeNote"></p>
+      <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה, והשער נעול לעריכה.</p>
+    </details>
+    </section>
+    <section class="flow-panel" id="reviewStep" aria-labelledby="reviewStepTitle" hidden>
+    <h2 id="reviewStepTitle" tabindex="-1">בודקים ומפיקים</h2>
+    <p class="step-intro">ודאו שהלקוח, המוצרים והסכום נכונים.</p>
+    <dl class="review-facts"><div><dt>לקוח</dt><dd id="reviewCustomer"></dd></div><div><dt>תאריך</dt><dd id="reviewDate"></dd></div><div id="reviewDetailsRow" hidden><dt>פרטים</dt><dd id="reviewDetails"></dd></div></dl>
+    <ul class="review-lines" id="reviewLines" aria-label="המוצרים בחשבונית"></ul>
     <div class="totals">
       <div><span class="lbl">לפני מע״מ, אחרי הנחות</span><b id="tBefore">0.00 ₪</b></div>
       <div><span class="lbl">מע"מ 18%</span><b id="tVat">0.00 ₪</b></div>
       <div><span class="lbl">סה"כ לתשלום</span><b id="tTotal">0.00 ₪</b></div>
     </div>
 
-    <section aria-label="הורדת מקור החשבונית" style="margin-top:16px;padding:16px;border:1px solid var(--border);border-radius:12px">
-      <p class="field-note">המקור יישמר בנספחי החשבונית וירד אוטומטית למכשיר, ללא משלוח מייל. לאחר מכן ייפתח העתק נפרד לחתימת הלקוח.</p>
+    <section class="download-note" aria-label="הורדת מקור החשבונית">
+      <p>המקור יישמר בפריוריטי וירד למכשיר. אחריו ייפתח העתק לחתימת הלקוח. ללא משלוח מייל.</p>
       <p id="digitalStatus" class="field-note" role="status">יש לבחור לקוח לבדיקת הגדרת מסמך ממוחשב בפריוריטי.</p>
     </section>
     <div class="actions">
       <button type="submit" id="submit">הפקה, סגירה והורדת מקור</button>
-      <span style="font-size:12.5px;color:var(--muted)">לאחר בדיקת פרטי הלקוח תיווצר חשבונית סופית (IN), המקור יישמר בנספחים וירד למכשיר ללא מייל, והעתק ייפתח לחתימה. סגירה לסופית אינה ניתנת לביטול. הסכום הקובע הוא בפריוריטי.</span>
+      <span class="final-warning">תופק חשבונית סופית (IN). הסגירה אינה ניתנת לביטול.<br>הסכום הקובע הוא בפריוריטי.</span>
     </div>
+    </section>
+    <section id="signatureDialog" class="flow-panel signature-step" aria-labelledby="signatureTitle" hidden>
+      <h2 id="signatureTitle" tabindex="-1">חתימת לקוח</h2>
+      <p class="step-intro">עיינו בהעתק, הזינו שם וחתמו. המסמך החתום יישמר בנספחי אותה חשבונית בפריוריטי.</p>
+      <iframe id="signaturePdf" title="העתק החשבונית לחתימת הלקוח"></iframe>
+      <p><a id="signatureCopyLink" target="_blank" rel="noopener">פתיחת ההעתק בחלון נפרד</a></p>
+      <label for="signatureName">שם החותם</label><input id="signatureName" maxlength="80" autocomplete="name">
+      <label for="signatureCanvas" class="signature-label">חתימת הלקוח על המסך</label>
+      <canvas id="signatureCanvas" width="640" height="180" aria-label="אזור חתימת הלקוח"></canvas>
+      <div class="signature-actions"><button type="button" id="clearSignature">ניקוי חתימה</button><button type="button" id="saveSignature" disabled>שמירת המסמך החתום בנספחים</button></div>
+      <p id="signatureStatus" role="status" aria-live="polite"></p>
+      <button type="button" id="closeSignature" class="signature-finish">חשבונית נוספת</button>
+    </section>
+    <p id="stepStatus" class="step-error" role="alert" hidden></p>
+    <div class="flow-actions"><button type="button" id="previousStep" hidden>חזרה</button><span id="stepCount" aria-live="polite">שלב 1 מתוך 4</span><button type="button" id="nextStep">המשך למוצרים</button></div>
     <div class="msg" id="msg"></div>
     <div class="msg" id="documentMsg" role="status" aria-live="polite"></div>
   </form>
 
-  <div class="card" id="recent">
-    <h2>חשבוניות אחרונות (משתמש API) <button type="button" class="refresh" id="refreshBtn">רענון</button></h2>
+  <details class="card recent-section" id="recent">
+    <summary>חשבוניות אחרונות <span id="recentHint">של הלקוח הנבחר</span></summary>
+    <div class="recent-toolbar"><span class="field-note" id="recentCustomer">עד 10 חשבוניות אחרונות</span><button type="button" class="refresh" id="refreshBtn" disabled>רענון</button></div>
     <div id="recentBody" style="color:var(--muted);font-size:13.5px">טוען…</div>
-  </div>
+  </details>
   </section>
 </div>
 
 <script src="/invoice-calculations.js"></script>
-<dialog id="signatureDialog" style="width:min(1000px,96vw);max-height:95vh;border:1px solid #ddd;border-radius:16px;padding:20px" dir="rtl">
-  <div style="display:flex;justify-content:space-between;gap:12px"><h2 id="signatureTitle">העתק החשבונית לחתימה</h2><button type="button" id="closeSignature">סגירה</button></div>
-  <p class="field-note">זהו העתק להחתמת הלקוח. החתימה תתווסף בעמוד נפרד, והמסמך יישמר בנספחי אותה חשבונית בפריוריטי.</p>
-  <iframe id="signaturePdf" title="העתק החשבונית לחתימת הלקוח" style="width:100%;height:40vh;border:1px solid #ddd"></iframe>
-  <p><a id="signatureCopyLink" target="_blank" rel="noopener">פתיחת ההעתק בחלון נפרד</a></p>
-  <label for="signatureName">שם החותם</label><input id="signatureName" maxlength="80" autocomplete="name">
-  <label for="signatureCanvas">חתימת הלקוח על המסך</label>
-  <canvas id="signatureCanvas" width="640" height="180" aria-label="אזור חתימת הלקוח" style="width:100%;max-width:640px;height:auto;border:2px solid #8993a1;border-radius:8px;touch-action:none;background:white"></canvas>
-  <div style="display:flex;gap:10px;margin-top:12px"><button type="button" id="clearSignature">ניקוי חתימה</button><button type="button" id="saveSignature" disabled>שמירת המסמך החתום בנספחים</button></div>
-  <p id="signatureStatus" role="status"></p>
+<dialog id="invoiceProgressDialog" class="invoice-progress" aria-labelledby="invoiceProgressTitle" aria-describedby="invoiceProgressHint" dir="rtl">
+  <svg class="progress-spinner" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 4a12 12 0 0 1 12 12"/></svg>
+  <h2 id="invoiceProgressTitle">מפיקים את החשבונית</h2>
+  <p id="invoiceProgressStatus" role="status" aria-live="polite" aria-atomic="true">בודקים את הפרטים ויוצרים את החשבונית…</p>
+  <ol class="progress-stages" aria-label="התקדמות ההפקה">
+    <li data-progress="creating">יצירת החשבונית</li>
+    <li data-progress="closing">סגירה לחשבונית סופית</li>
+    <li data-progress="original">הכנת המקור להורדה</li>
+    <li data-progress="signature">הכנת ההעתק לחתימה</li>
+  </ol>
+  <p id="invoiceProgressHint">נא להמתין לסיום. אין צורך ללחוץ שוב או לרענן את העמוד.</p>
 </dialog>
 <script>
 'use strict';
@@ -375,6 +421,7 @@ custSearch.addEventListener('focus', () => {
 
 custSearch.addEventListener('input', () => {
   $('custname').value = '';
+  loadRecent();
   $('custChosen').textContent = '';
   renderCustDetails(null);
   const q = custSearch.value.trim();
@@ -443,6 +490,7 @@ function renderCustDetails(d) {
 
 let digitalCustomerRequest=0;
 async function loadCustDetails(custname) {
+  loadRecent();
   const request=++digitalCustomerRequest;
   $('digitalStatus').textContent='בודק הגדרת מסמך ממוחשב בפריוריטי…';
   api('/api/customers/digital?custname='+encodeURIComponent(custname)).then(profile=>{
@@ -596,7 +644,7 @@ async function loadGoldPrices() {
     if ($('date').value !== date || $('invoiceType').value !== '1') return;
     currentGoldPrices = data;
     const stamp = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.updatedAt));
-    status.textContent = `זהב מפריוריטי · עדכון ${stamp} · ` + Object.entries(data.prices).map(([part, info]) => `${part}: ${info.price} $ לגרם`).join(' | ') + ' · נטען פעם אחת לתאריך החשבונית; תיבת בנק ישראל בוחרת את שער הדולר בלבד.';
+    status.textContent = `מחירי הזהב נטענו מפריוריטי · עדכון ${stamp}`;
   } catch (err) {
     if ($('date').value !== date || $('invoiceType').value !== '1') return;
     status.textContent = 'מחיר הזהב אינו זמין: ' + err.message;
@@ -915,6 +963,7 @@ $('form').addEventListener('submit', async e => {
   const details = $('details').value.trim();
   btn.disabled = true; btn.textContent = 'שולח…';
   try {
+    if (typeof InvoiceProgress !== 'undefined') InvoiceProgress.show('creating');
     await api('/api/invoices/original-download-preflight',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({custname:$('custname').value})});
     // מניעת כפילויות: אם יש מזהה הזמנה, בודקים שלא קיימת כבר חשבונית עם אותו מזהה
     if (details) {
@@ -951,38 +1000,51 @@ $('form').addEventListener('submit', async e => {
       '');
     // איפוס שורות לקראת החשבונית הבאה
     tbody.innerHTML = ''; addLine(); $('details').value = ''; recalc();
+    if (typeof resetInvoiceFlow === 'function') resetInvoiceFlow();
     if(data.prepared===false){showMsg('warn','הטיוטה '+escapeHtml(data.ivnum)+' נוצרה, אך פרטי המשלוח לא אומתו: '+escapeHtml(data.preparationError||'')+' — אין להפיק שוב. אפשר לנסות לסגור את אותה טיוטה. <button type="button" class="close-btn" data-iv="'+escapeHtml(data.ivnum)+'">ניסיון סגירה חוזר</button>');return;}
     btn.textContent = 'סוגר ומכין מקור להורדה…';
+    if (typeof InvoiceProgress !== 'undefined') InvoiceProgress.update('closing');
     await closeInvoice(data.ivnum, null, false);
     loadRecent();
   } catch (err) {
     showMsg('err', '✖ ' + err.message);
   } finally {
+    if (typeof InvoiceProgress !== 'undefined') InvoiceProgress.hide();
     btn.disabled = false; btn.textContent = 'הפקה, סגירה והורדת מקור';
   }
 });
 
 // ---------- חשבוניות אחרונות ----------
+let recentRequest = 0;
 async function loadRecent() {
+  const request = ++recentRequest;
   const el = $('recentBody');
+  const customer = $('custname').value.trim();
+  $('refreshBtn').disabled = !customer;
+  $('recentHint').textContent = customer ? custSearch.value.trim() || customer : 'של הלקוח הנבחר';
+  $('recentCustomer').textContent = customer ? 'עד 10 חשבוניות אחרונות · לקוח ' + customer : 'עד 10 חשבוניות אחרונות';
+  if (!customer) { el.textContent = 'בחרו לקוח כדי לראות את החשבוניות שלו.'; return; }
+  el.textContent = 'טוען את החשבוניות של הלקוח…';
   try {
-    const data = await api('/api/invoices/recent');
-    const rows = data.value || [];
-    if (!rows.length) { el.textContent = 'אין עדיין חשבוניות.'; return; }
-    el.innerHTML = `<table><thead><tr>
-        <th>מספר</th><th>תאריך</th><th>לקוח</th><th>סטטוס</th><th>סה"כ</th><th>פרטים</th><th></th>
-      </tr></thead><tbody>` +
-      rows.map(r => `<tr>
-        <td class="num-ltr">${r.IVNUM}</td>
-        <td>${(r.IVDATE || '').slice(0, 10).split('-').reverse().join('/')}</td>
-        <td>${r.CDES || r.CUSTNAME || ''}</td>
-        <td class="${r.STATDES === 'טיוטא' ? 'draft' : 'final'}">${r.STATDES || ''}</td>
-        <td>${fmt(r.TOTPRICE)}</td>
-        <td style="color:var(--muted)">${r.DETAILS || ''}</td>
-        <td class="invoice-document-actions">${r.STATDES === 'טיוטא' ? `<button type="button" class="close-btn" data-iv="${r.IVNUM}">סגירה ל-IN</button> ` : ''}<button type="button" class="close-btn dl-btn" data-iv="${r.IVNUM}" title="הורדת מסמך החשבונית">העתק PDF ⬇</button>${r.STATDES !== 'טיוטא' ? `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${r.IVNUM}" title="הורדת המקור הקיים מהנספחים, ללא הפקה או מייל">הורדת מקור ⬇</button> <button type="button" class="close-btn sign-btn" data-iv="${r.IVNUM}">פתיחה וחתימה</button>` : ''}</td>
-      </tr>`).join('') + '</tbody></table>';
+    const data = await api('/api/invoices/recent?custname=' + encodeURIComponent(customer));
+    if (request !== recentRequest || $('custname').value.trim() !== customer) return;
+    const rows = (data.value || []).filter(row => String(row.CUSTNAME) === customer);
+    if (!rows.length) { el.textContent = 'אין עדיין חשבוניות להצגה ללקוח הזה.'; return; }
+    el.innerHTML = '<ol class="recent-list" aria-label="חשבוניות הלקוח">' + rows.map((r, index) => {
+      const ivnum = escapeHtml(r.IVNUM);
+      const draft = r.STATDES === 'טיוטא';
+      const date = escapeHtml((r.IVDATE || '').slice(0,10).split('-').reverse().join('.'));
+      return `<li class="recent-invoice"><article aria-labelledby="recentTitle${index}">
+        <div class="recent-invoice-header"><div><h3 id="recentTitle${index}">חשבונית <bdi>${ivnum}</bdi></h3><div class="recent-meta"><span>${date}</span><span class="invoice-status ${draft ? 'draft' : 'final'}">${escapeHtml(r.STATDES || '')}</span></div></div><div class="recent-amount"><span>סה״כ</span><strong>${fmt(r.TOTPRICE)}</strong></div></div>
+        ${r.DETAILS ? `<p class="recent-reference">פרטים: ${escapeHtml(r.DETAILS)}</p>` : ''}
+        <div class="recent-actions" role="group" aria-label="פעולות לחשבונית ${ivnum}">
+          ${draft ? `<button type="button" class="close-btn recent-primary" data-iv="${ivnum}">סגירה לחשבונית סופית</button>` : `<button type="button" class="close-btn signed-copy-btn recent-primary" data-iv="${ivnum}">העתק חתום</button><button type="button" class="close-btn sign-btn" data-iv="${ivnum}">פתיחה וחתימה</button>`}
+          <details class="invoice-more"><summary>אפשרויות נוספות</summary><div class="invoice-more-actions"><button type="button" class="close-btn dl-btn" data-iv="${ivnum}">הורדת העתק PDF</button>${draft ? '' : `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${ivnum}">הורדת מקור</button>`}</div></details>
+        </div></article></li>`;
+    }).join('') + '</ol>';
   } catch (e) {
-    el.innerHTML = `<span style="color:var(--err)">${e.message}</span>`;
+    if (request !== recentRequest || $('custname').value.trim() !== customer) return;
+    el.textContent = 'לא ניתן לטעון את חשבוניות הלקוח: ' + e.message + '. אפשר לנסות שוב בלחיצה על רענון.';
   }
 }
 $('refreshBtn').addEventListener('click', loadRecent);
@@ -1070,12 +1132,22 @@ async function fetchInvoiceDocument(ivnum, btn, kind) {
 document.addEventListener('click', e => {
   const b = e.target.closest('.close-btn');
   if (!b) return;
-  if (b.classList.contains('sign-btn')) openInvoiceForSigning(b.dataset.iv);
+  if (b.classList.contains('signed-copy-btn')) openSignedInvoice(b.dataset.iv, b);
+  else if (b.classList.contains('sign-btn')) openInvoiceForSigning(b.dataset.iv);
   else if (b.classList.contains('prepare-original-btn')) finishOriginalDownload({ivnum:b.dataset.iv});
   else if (b.classList.contains('dl-btn')) downloadInvoice(b.dataset.iv, b);
   else closeInvoice(b.dataset.iv, b);
 });
 </script>
+<script src="/invoice-flow.js"></script>
+<script src="/invoice-progress.js"></script>
 <script src="/signature.js"></script>
+<dialog id="signedCopyDialog" class="signed-copy-viewer" aria-labelledby="signedCopyTitle" dir="rtl">
+  <div class="signed-copy-heading"><h2 id="signedCopyTitle">העתק חתום</h2><button type="button" id="closeSignedCopy">סגירה</button></div>
+  <p id="signedCopyStatus" role="status" aria-live="polite"></p>
+  <iframe id="signedCopyPdf" title="ההעתק החתום שנשמר בפריוריטי" hidden></iframe>
+  <a id="signedCopyLink" target="_blank" rel="noopener" hidden>פתיחת ההעתק החתום בחלון נפרד</a>
+</dialog>
+<script src="/signed-copy.js"></script>
 </body>
 </html>

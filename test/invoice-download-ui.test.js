@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 function workflow({closeError,downloadError,waitClose,digitalMode=false,downloadMode=false,consented=true,email='agent@example.com',preflightError}={}) {
-  const calls=[],messages=[],anchors=[],timers=[]; let submit;
+  const calls=[],messages=[],anchors=[],timers=[],progress=[]; let submit;
   const button={disabled:false,textContent:'הפקה, סגירה והורדת PDF'};
   const retry={disabled:false,textContent:'הורדה חוזרת'};
   const notices={className:'',textContent:'',appendChild(a){anchors.push(a);}};
@@ -13,7 +13,7 @@ function workflow({closeError,downloadError,waitClose,digitalMode=false,download
   if(digitalMode){fields.digitalEmailConsent={checked:consented};fields.invoiceEmail={value:email,checkValidity:()=>/^[^@ ]+@[^@ ]+\.[^@ ]+$/.test(email)};}
   const msg={className:'',querySelector(){return retry;}};
   class TestURL extends URL { static createObjectURL(){return 'blob:test';} static revokeObjectURL(){} }
-  const ctx={msg,$:id=>fields[id],async finishOriginalDownload(data){calls.push('original-finish:'+data.ivnum);},async finishDigitalInvoice(data){calls.push('digital-finish:'+data.ivnum);},readLines:()=>[{partname:'14',price:78.36,exchange:3.11}],tbody:{innerHTML:''},addLine(){},recalc(){},loadRecent(){},escapeHtml:String,fmt:String,confirm(){throw new Error('Unexpected confirmation in authorized one-click flow');},
+  const ctx={InvoiceProgress:{show:stage=>progress.push('show:'+stage),update:stage=>progress.push(stage),hide:()=>progress.push('hide')},msg,$:id=>fields[id],async finishOriginalDownload(data){calls.push('original-finish:'+data.ivnum);},async finishDigitalInvoice(data){calls.push('digital-finish:'+data.ivnum);},readLines:()=>[{partname:'14',price:78.36,exchange:3.11}],tbody:{innerHTML:''},addLine(){},recalc(){},loadRecent(){},escapeHtml:String,fmt:String,confirm(){throw new Error('Unexpected confirmation in authorized one-click flow');},
     async api(url,opts){calls.push(url);if(url.includes('/original-download-preflight')){if(preflightError)throw Error(preflightError);return {ok:true};}if(url.includes('/check'))return {value:[]};if(url.endsWith('/close')){if(waitClose)await waitClose;if(closeError)throw new Error(closeError);return {ivnum:'IN-TEST',status:'סופית',originalDownload:downloadMode,digitalEmail:digitalMode,email};}return {ivnum:'T-TEST',status:'טיוטא',total:100};},
     async fetch(url){calls.push(url);if(downloadError)throw new Error(downloadError);return {ok:true,headers:{get:()=> 'application/pdf'},blob:async()=>({size:10})};},
     document:{body:{appendChild(){}},createElement(){const a={click(){anchors.push(a);},remove(){}};return a;}},URL:TestURL,location:{href:'http://local/'},setTimeout(fn){timers.push(fn);},showMsg(type,text){messages.push({type,text});},
@@ -22,8 +22,20 @@ function workflow({closeError,downloadError,waitClose,digitalMode=false,download
   const submitCode=html.slice(html.indexOf("$('form').addEventListener('submit'"),html.indexOf('// ---------- חשבוניות אחרונות'));
   const closeCode=html.slice(html.indexOf('async function closeInvoice('),html.lastIndexOf("document.addEventListener('click', e => {"));
   vm.runInNewContext(submitCode+'\n'+closeCode,ctx);
-  return {run:()=>submit({preventDefault(){}}),ctx,calls,messages,anchors,timers,button,retry,notices,fields};
+  return {run:()=>submit({preventDefault(){}}),ctx,calls,messages,anchors,timers,button,retry,notices,fields,progress};
 }
+
+test('issuance shows progress until closing finishes, and releases it on failure',async()=>{
+  let done;const pending=new Promise(resolve=>{done=resolve;});const w=workflow({waitClose:pending});
+  w.fields.custname.value='301100';
+  const run=w.run();
+  while(!w.calls.includes('/api/invoices/close'))await Promise.resolve();
+  assert.deepEqual(w.progress,['show:creating','closing']);
+  done();await run;assert.equal(w.progress.at(-1),'hide');
+  const failed=workflow({preflightError:'test failure'});failed.fields.custname.value='301100';await failed.run();
+  assert.deepEqual(failed.progress,['show:creating','hide']);
+  assert.equal(failed.button.disabled,false);
+});
 test('one click creates once, closes once, and downloads the final invoice number',async()=>{
   const w=workflow();await w.run();
   assert.deepEqual(w.calls,['/api/invoices/original-download-preflight','/api/invoices/check?details=ORDER-TEST','/api/invoices','/api/invoices/close','/api/invoices/document?ivnum=IN-TEST']);

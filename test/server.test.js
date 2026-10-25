@@ -212,9 +212,46 @@ async function deliveryFixture(t){const fsp=require('node:fs/promises');const os
 const validDigitalBody=()=>({custname:'TEST',date:'2026-10-22',invoiceType:'1',lines:[{partname:'14',quantity:1,price:10,currency:'USD',exchange:3.11}],digitalEmail:true,consent:true,email:'agent@example.com',requestId:'cdf70483-4d40-4320-85c5-4569db7eac51'});
 test('digital creation retries reuse one draft and reject changing the payload under its request ID',async t=>{const store=await deliveryFixture(t);let created=0,prepared=0;const server=isolatedServer((_url,options)=>{if(options.method==='POST'){created++;return {IV:123,IVNUM:'T123',STATDES:'טיוטא'};}throw Error('Unexpected transport');},200,{async prepareDigitalCustomer(custname,email){prepared++;return {custname,email};},async prepareDigitalInvoice(){}},store);const body=validDigitalBody();const result=await Promise.all([server.request('POST','/api/invoices',body),server.request('POST','/api/invoices',body)]);assert.equal(result[0].status,200);assert.equal(result[1].body.ivnum,'T123');assert.equal(created,1);assert.equal(prepared,1);const changed=await server.request('POST','/api/invoices',{...body,email:'other@example.com'});assert.equal(changed.status,400);assert.equal(created,1);});
 test('mail retries cannot send twice or change the saved recipient',async t=>{const store=await deliveryFixture(t);const d=require('../digital-invoice');const key=d.keyFor('http://priority.invalid/odata/config/test-only',123);await store.write(key,'context',{digitalEmail:true,custname:'TEST',email:'agent@example.com'});let mails=0;const server=isolatedServer(()=>({IV:123,IVNUM:'IN123',CUSTNAME:'TEST',OWNERLOGIN:'fake-user'}),200,{async sendDigitalInvoice(ivnum,email){mails++;return {ivnum,email,acceptedByPriority:true};}},store);const body={ivnum:'IN123',digitalEmail:true,consent:true,email:'agent@example.com'};assert.equal((await server.request('POST','/api/invoices/email',body)).status,200);assert.equal((await server.request('POST','/api/invoices/email',body)).status,200);assert.equal(mails,1);assert.equal((await server.request('POST','/api/invoices/email',{...body,email:'other@example.com'})).status,400);assert.equal(mails,1);});
-test('signed copy is attached to its own invoice once; another invoice cannot use its token',async t=>{const store=await deliveryFixture(t);const {PDFDocument}=require('pdf-lib');const {PNG}=require('pngjs');const fixture=await PDFDocument.create();fixture.addPage().drawText('TEST COPY IN123');const bytes=Buffer.from(await fixture.save());const png=new PNG({width:640,height:180});png.data.fill(255);for(let x=30;x<500;x++)for(let y=80;y<84;y++){const i=(640*y+x)*4;png.data[i]=png.data[i+1]=png.data[i+2]=20;}const signature='data:image/png;base64,'+PNG.sync.write(png).toString('base64');let uploads=0,descriptor;let uploaded;
+test('signed copy is attached to its own invoice once; another invoice cannot use its token',async t=>{const store=await deliveryFixture(t);const {PDFDocument}=require('pdf-lib');const {PNG}=require('pngjs');const fixture=await PDFDocument.create();const invoicePage=fixture.addPage();invoicePage.drawText('TEST COPY IN123');await require('./fixtures/signature-invoice.cjs').addSignatureFields(fixture,invoicePage);const bytes=Buffer.from(await fixture.save());const png=new PNG({width:640,height:180});png.data.fill(255);for(let x=30;x<500;x++)for(let y=80;y<84;y++){const i=(640*y+x)*4;png.data[i]=png.data[i+1]=png.data[i+2]=20;}const signature='data:image/png;base64,'+PNG.sync.write(png).toString('base64');let uploads=0,descriptor;let uploaded;
 const server=isolatedServer((url,options)=>{if(url.includes('EXTFILES_SUBFORM')){if(options.method==='POST'){uploads++;const payload=JSON.parse(options.body);descriptor=payload.EXTFILEDES;uploaded=Buffer.from(payload.EXTFILENAME.split(',')[1],'base64');return {EXTFILENUM:77};}return {value:descriptor?[{EXTFILENUM:77,EXTFILEDES:descriptor}]:[]};}return {IV:url.includes('IN124')?124:123,IVNUM:url.includes('IN124')?'IN124':'IN123',CUSTNAME:'TEST',OWNERLOGIN:'fake-user'};},200,{async getInvoiceDocumentUrl(){return {datauri:'data:application/pdf;base64,'+bytes.toString('base64')};}},store);
-const copy=await server.request('GET','/api/invoices/signature-copy?ivnum=IN123');assert.equal(copy.status,200);assert.deepEqual(copy.buffer,bytes);const token=copy.headers['X-Signature-Token'];const body={ivnum:'IN123',token,signer:'בדיקה',signature};assert.equal((await server.request('POST','/api/invoices/sign',{...body,ivnum:'IN124'})).status,400);assert.equal(uploads,0);assert.equal((await server.request('POST','/api/invoices/sign',body)).status,200);assert.equal((await server.request('POST','/api/invoices/sign',body)).status,200);assert.equal(uploads,1);assert.equal((await PDFDocument.load(uploaded)).getPageCount(),2);assert.match(descriptor,/IN123/);});
+const copy=await server.request('GET','/api/invoices/signature-copy?ivnum=IN123');assert.equal(copy.status,200);assert.deepEqual(copy.buffer,bytes);const token=copy.headers['X-Signature-Token'];const body={ivnum:'IN123',token,signer:'בדיקה',signature};assert.equal((await server.request('POST','/api/invoices/sign',{...body,ivnum:'IN124'})).status,400);assert.equal(uploads,0);assert.equal((await server.request('POST','/api/invoices/sign',body)).status,200);assert.equal((await server.request('POST','/api/invoices/sign',body)).status,200);assert.equal(uploads,1);assert.equal((await PDFDocument.load(uploaded)).getPageCount(),1);assert.match(descriptor,/IN123/);});
+
+test('recent invoices require a customer, scope the Priority query and exclude other customers',async()=>{
+  const server=isolatedServer(()=>({value:[{IVNUM:'IN123',CUSTNAME:'301100'},{IVNUM:'IN124',CUSTNAME:'OTHER'}]}));
+  assert.equal((await server.request('GET','/api/invoices/recent')).status,400);
+  assert.equal(server.calls.length,0);
+  const result=await server.request('GET','/api/invoices/recent?custname=301100');
+  assert.equal(result.status,200);
+  assert.equal(result.body.value.length,1);
+  assert.equal(result.body.value[0].CUSTNAME,'301100');
+  const query=new URL(server.calls[0].url).searchParams;
+  assert.equal(query.get('$filter'),"OWNERLOGIN eq 'fake-user' and CUSTNAME eq '301100'");
+  assert.equal(query.get('$top'),'10');
+});
+
+test('saved signed copy returns the exact Priority attachment using GETs only',async()=>{
+  const bytes=Buffer.from('%PDF-1.7\ncustomer signed copy');
+  const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:'data:application/pdf;base64,'+Buffer.from('%PDF-original').toString('base64')},{EXTFILENUM:2,EXTFILEDES:'SIGNED_IN123_test',EXTFILENAME:'data:application/pdf;base64,'+bytes.toString('base64')}]}:{IV:123,OWNERLOGIN:'fake-user',CUSTNAME:'301100'});
+  const result=await server.request('GET','/api/invoices/existing-signed?ivnum=IN123');
+  assert.equal(result.status,200);assert.deepEqual(result.buffer,bytes);
+  assert.match(result.headers['Content-Disposition'],/IN123-signed.pdf/);
+  assert.equal(server.calls.length,2);assert.ok(server.calls.every(x=>x.method==='GET'));
+});
+
+test('signed copy lookup rejects missing, ambiguous, mismatched or invalid attachments without generation',async()=>{
+  const pdf='data:application/pdf;base64,'+Buffer.from('%PDF-test').toString('base64');
+  for(const rows of [[],[{EXTFILEDES:'SIGNED_IN124_other',EXTFILENAME:pdf}],[{EXTFILEDES:'SIGNED_IN123_a',EXTFILENAME:pdf},{EXTFILEDES:'SIGNED_IN123_b',EXTFILENAME:pdf}],[{EXTFILEDES:'SIGNED_IN123_a',EXTFILENAME:'data:application/pdf;base64,YmFk'}],[{EXTFILEDES:'SIGNED_IN123_a',EXTFILENAME:'https://other.invalid/signed.pdf'}]]){
+    const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:rows}:{IV:123,OWNERLOGIN:'fake-user',CUSTNAME:'301100'});
+    const result=await server.request('GET','/api/invoices/existing-signed?ivnum=IN123');
+    assert.ok(result.status>=400);assert.equal(server.calls.length,2);assert.ok(server.calls.every(x=>x.method==='GET'));
+  }
+});
+
+test('signed copy lookup enforces invoice ownership and final invoice identifiers',async()=>{
+  const server=isolatedServer(()=>({IV:123,OWNERLOGIN:'other-user'}));
+  assert.equal((await server.request('GET','/api/invoices/existing-signed?ivnum=T123')).status,400);assert.equal(server.calls.length,0);
+  assert.equal((await server.request('GET','/api/invoices/existing-signed?ivnum=IN123')).status,400);assert.equal(server.calls.length,1);
+});
 
 test('existing original download returns the exact attachment bytes using GETs only',async()=>{
   const bytes=Buffer.from('%PDF-1.7\nexisting signed original /ByteRange [0 1 2 3]');

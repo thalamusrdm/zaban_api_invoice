@@ -1,5 +1,5 @@
 // שרת מקומי להפקת חשבוניות מס בפריוריטי.
-// Node 18+; install dependencies with npm ci, then run npm start.
+// Node 22.13+; install dependencies with npm ci, then run npm start.
 'use strict';
 
 const http = require('http');
@@ -270,10 +270,13 @@ const handlers = {
     return priority('GET', `AINVOICES?$select=IVNUM,IVDATE,STATDES,TOTPRICE,DETAILS&$filter=${encodeURIComponent(filter)}&$top=5`);
   },
 
-  // חשבוניות אחרונות שנוצרו דרך ה-API
-  'GET /api/invoices/recent': async () => {
-    const filter = `OWNERLOGIN eq '${odataStr(USER)}'`;
-    return priority('GET', `AINVOICES?$select=IVNUM,IVDATE,CUSTNAME,CDES,STATDES,QPRICE,VAT,TOTPRICE,DETAILS&$filter=${encodeURIComponent(filter)}&$orderby=IV desc&$top=10`);
+  // Customer scope is required; never return a mixed customer invoice list.
+  'GET /api/invoices/recent': async q => {
+    const custname = String(q.get('custname') || '').trim();
+    if (!custname || custname.length > 16) throw badRequest('יש לבחור לקוח להצגת החשבוניות שלו.');
+    const filter = `OWNERLOGIN eq '${odataStr(USER)}' and CUSTNAME eq '${odataStr(custname)}'`;
+    const result = await priority('GET', `AINVOICES?$select=IVNUM,IVDATE,CUSTNAME,CDES,STATDES,QPRICE,VAT,TOTPRICE,DETAILS&$filter=${encodeURIComponent(filter)}&$orderby=IV desc&$top=10`);
+    return {...result, value:(result.value || []).filter(row => String(row.CUSTNAME) === custname)};
   },
 
   // סגירת חשבונית: טיוטה (T...) -> סופית (IN...).
@@ -381,7 +384,22 @@ const handlers = {
     return result;
   },
 
-  // Download existing signed bytes only; no printing, generation or email.
+  // Read the saved customer-signed copy, never generate a replacement.
+  'GET /api/invoices/existing-signed': async q => {
+    const ivnum = String(q.get('ivnum') || '').trim();
+    await ownedInvoice(ivnum);
+    const attachments = await priority('GET', `AINVOICES(IVNUM='${odataStr(ivnum)}',IVTYPE='A',DEBIT='D')/EXTFILES_SUBFORM?$select=EXTFILENUM,EXTFILEDES,EXTFILENAME`);
+    const copies = (attachments.value || []).filter(row => String(row.EXTFILEDES || '').trim().startsWith('SIGNED_' + ivnum + '_'));
+    if (!copies.length) throw Object.assign(new Error('לא נמצא העתק חתום בנספחי חשבונית ' + ivnum + ' בפריוריטי.'), {status:404});
+    if (copies.length !== 1) throw badRequest('נמצאו כמה העתקים חתומים. יש לבחור את המסמך המתאים בנספחי החשבונית בפריוריטי.');
+    const match = String(copies[0].EXTFILENAME || '').match(/^data:application\/pdf;base64,([A-Za-z0-9+/=\r\n]+)$/);
+    if (!match) throw badRequest('ההעתק החתום לא הוחזר כקובץ PDF תקין מפריוריטי.');
+    const buffer = Buffer.from(match[1], 'base64');
+    if (buffer.subarray(0,5).toString() !== '%PDF-') throw badRequest('הנספח החתום אינו קובץ PDF תקין.');
+    return {__file:{buffer,contentType:'application/pdf',filename:ivnum + '-signed.pdf'}};
+  },
+
+  // Download the existing original only; no printing, generation or email.
   'GET /api/invoices/existing-original': async q => {
     const ivnum = String(q.get('ivnum') || '').trim();
     await ownedInvoice(ivnum);

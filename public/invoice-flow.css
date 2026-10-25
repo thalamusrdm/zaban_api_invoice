@@ -1,0 +1,172 @@
+:root { --muted: #596273; --accent: #946c09; --accent-dark: #785707; }
+body { line-height: 1.55; }
+::selection { background: #f0dfb4; color: #1a2233; }
+input { caret-color: var(--accent); }
+input::placeholder { color: #677080; opacity: 1; }
+button, summary { touch-action: manipulation; }
+button, input, select { min-height: 42px; }
+summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-weight: 600; }
+summary:focus-visible, a:focus-visible, .table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+summary span { color: var(--muted); font-size: 13px; font-weight: 400; margin-inline-start: 12px; }
+.wrap { max-width: 1100px; padding-top: 28px; }
+header { margin-bottom: 32px; }
+h1 { font-size: 20px; }
+.card { border-radius: 12px; }
+#form { padding: 0 28px 24px; }
+.flow-steps { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 28px; gap: 24px; }
+.flow-steps button { width: auto; display: flex; align-items: center; gap: 8px; padding: 18px 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; }
+.flow-steps button span { display: inline-grid; place-items: center; width: 25px; height: 25px; border: 1px solid var(--border); border-radius: 50%; font-size: 13px; }
+.flow-steps button[aria-current] { color: var(--accent-dark); border-bottom-color: var(--accent); font-weight: 600; }
+.flow-steps button[aria-current] span { background: var(--accent); border-color: var(--accent); color: white; }
+.flow-steps button:disabled { cursor: default; }
+.signature-step #signaturePdf { width: 100%; height: 38vh; min-height: 200px; border: 1px solid var(--border); }
+.signature-step a { color: var(--accent-dark); text-underline-offset: 3px; }
+.signature-step #signatureName { max-width: 640px; }
+.signature-label { margin-top: 20px; }
+#signatureCanvas { display: block; width: 100%; max-width: 640px; height: auto; border: 2px solid #8993a1; border-radius: 8px; touch-action: none; background: white; }
+#signatureCanvas[aria-disabled="true"] { border-color: var(--border); }
+.signature-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; max-width: 640px; }
+.signature-actions button { width: auto; cursor: pointer; }
+#saveSignature { background: var(--accent); border-color: var(--accent); color: white; padding: 10px 20px; }
+#saveSignature:disabled { background: #edf0ed; border-color: #d5dbd5; color: #415341; cursor: default; }
+#signatureStatus { max-width: 70ch; overflow-wrap: anywhere; }
+.signature-finish { width: auto; padding: 10px 20px; cursor: pointer; }
+.signed-copy-viewer { width: min(1000px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; border: 0; border-radius: 12px; padding: 24px; background: var(--card); color: var(--text); }
+.signed-copy-viewer::backdrop { background: #1a223366; }
+.signed-copy-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.signed-copy-heading h2 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+#closeSignedCopy { width: auto; cursor: pointer; }
+#signedCopyPdf { display: block; width: 100%; height: 65vh; border: 1px solid var(--border); margin-block: 16px; }
+#signedCopyLink { display: inline-block; color: var(--accent-dark); text-underline-offset: 3px; }
+.flow-panel h2 { font-size: 22px; margin: 0 0 6px; }
+.flow-panel h2:focus, #selectedTypeTitle:focus { outline: none; }
+.step-intro { color: var(--muted); margin: 0 0 24px; }
+.grid { grid-template-columns: 2fr 1fr; gap: 24px; }
+label { color: var(--text); margin-bottom: 6px; }
+.field-note { font-size: 13px; line-height: 1.6; }
+.optional-fields { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 8px; }
+.invoice-fields { border: 0; padding: 12px 0 0; margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.pricing-settings { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; padding-top: 14px; }
+.checkbox-label { display: flex; gap: 8px; align-items: center; }
+.checkbox-label input { width: 18px; min-height: 18px; accent-color: var(--accent); }
+.flow-actions { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--border); margin-top: 28px; padding-top: 20px; }
+.flow-actions button { width: auto; padding: 10px 22px; cursor: pointer; }
+#nextStep { margin-inline-start: auto; background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+#nextStep:hover { background: var(--accent-dark); }
+#stepCount { color: var(--muted); font-size: 13px; }
+.step-error { color: var(--err); margin-top: 20px; }
+.type-picker { max-width: 840px; margin: 0 auto; padding: 24px 0; }
+.completion-notice { padding: 20px 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.completion-notice h3 { margin: 0 0 8px; color: var(--ok); font-size: 22px; }
+.completion-notice p { margin: 0; max-width: 65ch; color: var(--text); }
+.type-picker h2 { font-size: 28px; }
+.type-choices { display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }
+.type-choice { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; min-height: 96px; gap: 20px; padding: 20px 24px; border: 1px solid var(--border); border-radius: 12px; box-shadow: none; }
+.type-choice:hover { box-shadow: none; background: #fdfaf2; border-color: var(--accent); }
+.type-choice svg { width: 32px; height: 32px; }
+.type-choice strong { font-size: 19px; }
+.type-choice .choice-next { margin: 0; font-size: 13px; }
+.invoice-heading h2 { font-size: 22px; }
+.invoice-heading .mini-btn { flex-shrink: 0; }
+#lines th { padding-block: 10px; }
+#lines td { padding-block: 12px; border-top: 1px solid var(--border); }
+.addline { border-style: solid; color: var(--accent-dark); padding: 8px 16px; }
+.review-facts { display: flex; flex-wrap: wrap; gap: 24px 48px; margin: 0 0 24px; }
+.review-facts dt { color: var(--muted); font-size: 13px; }
+.review-facts dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.review-lines { list-style: none; padding: 0; margin: 0; }
+.review-lines li { display: flex; justify-content: space-between; gap: 20px; padding: 12px 0; border-top: 1px solid var(--border); }
+.review-lines li span:first-child { overflow-wrap: anywhere; }
+.review-lines li span:last-child { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.totals { justify-content: space-between; gap: 24px; padding-block: 20px; margin-top: 12px; }
+.totals > div:last-child b { font-size: 24px; color: var(--accent-dark); }
+.totals b, .l-total { font-variant-numeric: tabular-nums; }
+.download-note { border-top: 1px solid var(--border); padding-top: 16px; }
+.download-note p { margin: 0 0 8px; font-size: 14px; max-width: 70ch; }
+.final-warning { font-size: 13px; color: var(--muted); }
+.recent-section { margin-top: 24px; }
+.recent-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; gap: 12px; }
+#recentBody { overflow-wrap: anywhere; }
+.recent-list { list-style: none; margin: 0; padding: 0; }
+.recent-invoice { padding: 24px 0; border-top: 1px solid var(--border); }
+.recent-invoice:last-child { padding-bottom: 4px; }
+.recent-invoice-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+.recent-invoice h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
+.recent-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; color: var(--muted); font-size: 13px; }
+.invoice-status { font-weight: 600; }
+.recent-amount { flex-shrink: 0; text-align: end; }
+.recent-amount span { display: block; color: var(--muted); font-size: 12px; }
+.recent-amount strong { font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recent-reference { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+.recent-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin-top: 16px; }
+.recent-actions .close-btn { padding: 9px 16px; min-height: 42px; font-size: 14px; }
+.recent-actions .recent-primary { background: var(--accent); border-color: var(--accent); color: white; }
+.recent-actions .recent-primary:hover { background: var(--accent-dark); }
+.invoice-more { margin-inline-start: auto; }
+.invoice-more summary { font-size: 13px; font-weight: 400; color: var(--muted); padding-inline: 4px; }
+.invoice-more-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 8px; }
+@media (max-width: 480px) {
+  .recent-invoice-header { gap: 12px; }
+  .recent-invoice h3 { font-size: 15px; }
+  .recent-amount strong { font-size: 16px; }
+  .recent-actions { gap: 10px; }
+  .recent-actions > .close-btn { flex: 1; padding-inline: 12px; }
+  .invoice-more { flex-basis: 100%; margin-inline-start: 0; }
+}
+.cust-list, .part-list { scrollbar-color: #adb3bc #fff; scrollbar-width: thin; }
+.invoice-progress { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; border: 0; border-radius: 16px; padding: 32px; background: var(--card); color: var(--text); box-shadow: 0 18px 56px #1a22332e; }
+.invoice-progress::backdrop { background: #1a223366; }
+.invoice-progress h2 { font-size: 22px; margin: 16px 0 8px; }
+#invoiceProgressStatus { min-height: 3.2em; margin: 0; font-size: 15px; }
+.progress-spinner { display: block; width: 32px; height: 32px; fill: none; stroke-width: 3; }
+.progress-spinner circle { stroke: var(--border); }
+.progress-spinner path { stroke: var(--accent); transform-origin: center; animation: progress-turn 1.1s linear infinite; }
+.progress-stages { display: grid; gap: 12px; padding-inline-start: 24px; margin: 24px 0; font-size: 14px; color: var(--muted); }
+.progress-stages [data-state="active"] { color: var(--accent-dark); font-weight: 600; }
+.progress-stages [data-state="done"] { color: var(--ok); }
+#invoiceProgressHint { margin: 0; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+@keyframes progress-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .progress-spinner path { animation: none; } }
+@media (max-width: 700px) {
+  .wrap { padding: 16px 12px 40px; }
+  header { gap: 12px; margin-bottom: 24px; }
+  #env { font-size: 12px; }
+  #form { padding: 0 16px 20px; }
+  .flow-steps { gap: 0; justify-content: space-between; margin-bottom: 24px; }
+  .flow-steps button { font-size: 13px; gap: 6px; padding-block: 16px; }
+  .flow-steps button span { width: 22px; height: 22px; }
+  .grid, .pricing-settings { grid-template-columns: 1fr; gap: 18px; }
+  .type-picker { padding-top: 8px; }
+  .type-picker h2 { font-size: 24px; }
+  .type-choice { grid-template-columns: 32px 1fr; gap: 6px 16px; padding: 16px; min-height: 100px; }
+  .type-choice svg { grid-row: 1 / 3; }
+  .type-choice .choice-next { grid-column: 2; }
+  .type-choice strong { font-size: 18px; }
+  summary span { display: block; margin-inline-start: 18px; margin-top: 2px; }
+  .invoice-fields { grid-template-columns: 1fr; }
+  .totals { flex-wrap: wrap; gap: 16px; }
+  .totals > div:last-child { flex-basis: 100%; }
+  #reviewStep .actions { flex-direction: column; align-items: stretch; }
+  #submit { width: 100%; }
+  .flow-actions { gap: 10px; flex-wrap: wrap; }
+  .flow-actions button { padding-inline: 14px; }
+  /* Keep product fields legible without a horizontally scrolling form. */
+  #lines, #lines tbody { display: block; width: 100%; }
+  #lines thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  #lines tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border-top: 1px solid var(--border); padding: 18px 0; }
+  #lines td { display: block; width: auto; padding: 0; border: 0; font-size: 14px; }
+  #lines td::before { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  #lines td:nth-child(1) { grid-column: 1 / -1; }
+  #lines td:nth-child(1)::before { content: 'מק״ט / מוצר'; }
+  #lines td:nth-child(2)::before { content: 'כמות'; }
+  #lines td:nth-child(3)::before { content: 'מחיר ($)'; }
+  #lines td:nth-child(5)::before { content: 'שער לש״ח'; }
+  #lines td:nth-child(6)::before { content: 'הנחה (%)'; }
+  #lines td:nth-child(7)::before { content: 'סה״כ (₪)'; }
+  #lines input { font-size: 15px; padding: 8px; }
+  #lines .del { width: auto; float: left; padding-inline: 10px; }
+  .part-list { min-width: 0; width: 100%; }
+}
+@media (max-width: 480px) {
+  .flow-steps button { flex: 1; min-width: 0; flex-direction: column; text-align: center; gap: 6px; font-size: 12px; }
+}
