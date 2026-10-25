@@ -1,0 +1,169 @@
+/* Apple Design: quiet hierarchy, immediate feedback, accessible materials.
+   Keep the existing invoice flow and its native controls. */
+:root {
+  --bg: #f5f5f7;
+  --card: #fff;
+  --text: #1d1d1f;
+  --muted: #626268;
+  --border: #dedee3;
+  --accent: #89670d;
+  --accent-dark: #6f5107;
+  --surface-soft: #f8f8fa;
+  --focus-ring: #9b771c;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
+}
+
+::selection { background: #eaddb7; color: var(--text); }
+.wrap { max-width: 1040px; padding: 0 28px 64px; }
+header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  align-items: center;
+  min-height: 100px;
+  margin: 0 -12px 32px;
+  padding: 18px 12px;
+  background: rgb(245 245 247 / 90%);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+}
+.workspace-caption { display: block; color: var(--muted); font-size: 0.6875rem; font-weight: 500; margin-bottom: 3px; }
+h1 { font-size: 1.1875rem; font-weight: 650; line-height: 1.35; letter-spacing: -0.025em; }
+#env { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; max-width: 48%; overflow-wrap: anywhere; }
+#env .dot { flex-shrink: 0; width: 7px; height: 7px; margin: 0; }
+
+.type-picker { max-width: 800px; padding: 34px 0 24px; }
+.type-picker h2 { font-size: clamp(1.75rem, 4vw, 2.5rem); line-height: 1.2; letter-spacing: -0.035em; font-weight: 650; margin: 0 0 14px; }
+.type-picker p { font-size: 1rem; margin: 0; }
+.type-choices { gap: 14px; margin-top: 36px; }
+.type-choice {
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 22px;
+  min-height: 116px;
+  padding: 24px;
+  border: 1px solid rgb(0 0 0 / 7%);
+  border-radius: 20px;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 2%);
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.type-choice svg {
+  width: 56px;
+  height: 56px;
+  padding: 11px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--choice-color) 9%, white);
+  stroke-width: 1.4;
+}
+.type-choice strong { font-size: 1.125rem; font-weight: 600; line-height: 1.45; letter-spacing: -0.015em; }
+.type-choice .choice-next { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+
+.card { border-color: rgb(0 0 0 / 7%); border-radius: 22px; box-shadow: 0 3px 12px rgb(0 0 0 / 2%); }
+#form { padding: 24px 32px 28px; }
+.invoice-heading { margin: 0 4px 24px; }
+.invoice-heading h2 { font-size: 1.5rem; letter-spacing: -0.025em; }
+.flow-steps { gap: 6px; padding: 5px; margin: 0 0 32px; border: 0; background: #f0f0f3; border-radius: 14px; }
+.flow-steps button { flex: 1; justify-content: center; gap: 8px; padding: 11px 8px; border: 0; border-radius: 10px; font-size: 0.8125rem; }
+.flow-steps button span { width: 22px; height: 22px; border: 0; background: #e3e3e8; color: #626268; font-size: 0.6875rem; }
+.flow-steps button[aria-current] { background: white; color: var(--text); box-shadow: 0 2px 5px rgb(0 0 0 / 7%); }
+.flow-steps button[aria-current] span { background: var(--accent); color: white; }
+.flow-steps button:disabled { opacity: 0.65; }
+.flow-panel h2 { font-size: 1.5rem; line-height: 1.3; letter-spacing: -0.025em; font-weight: 650; margin-bottom: 8px; }
+.step-intro { margin-bottom: 28px; }
+.grid { gap: 24px; }
+label { font-size: 0.8125rem; font-weight: 500; margin-bottom: 8px; }
+input, select, button { border-radius: 11px; min-height: 44px; }
+input, select { padding: 11px 13px; border-color: #d5d5db; background: #fff; transition: border-color 140ms ease, box-shadow 140ms ease; }
+input::placeholder { color: #717178; }
+input:focus, select:focus { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-color: var(--accent); }
+input[readonly] { background: var(--surface-soft); color: #515158; border-color: var(--border); }
+button { cursor: pointer; transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
+button:not(:disabled):active { transform: scale(0.98); transition: transform 60ms ease-out; }
+button:disabled { cursor: default; }
+button:focus-visible, summary:focus-visible, a:focus-visible, .table-scroll:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 4px; }
+.mini-btn, .close-btn, .refresh { border-color: var(--border); color: var(--accent-dark); background: white; padding: 8px 14px; }
+.optional-fields { margin-top: 28px; padding-top: 12px; }
+summary { font-size: 0.875rem; }
+summary span { font-size: 0.75rem; }
+.field-note { font-size: 0.75rem; line-height: 1.7; }
+.checkbox-label { gap: 10px; min-height: 44px; }
+.checkbox-label input { flex-shrink: 0; }
+#custInfo { background: var(--surface-soft); padding: 16px; border-radius: 14px; }
+.cust-list, .part-list { border-radius: 14px; border-color: rgb(0 0 0 / 10%); box-shadow: 0 12px 32px rgb(0 0 0 / 12%); padding: 5px; }
+.cust-list div, .part-list div { border-radius: 8px; padding-block: 10px; }
+.cust-list div:hover, .cust-list div.active, .part-list div:hover, .part-list div.active { background: #f3eedf; }
+.flow-actions { padding-top: 24px; margin-top: 32px; }
+.flow-actions button { padding: 11px 24px; }
+#nextStep, #submit, #saveSignature, .recent-actions .recent-primary { border-radius: 12px; font-weight: 600; box-shadow: 0 2px 3px rgb(0 0 0 / 5%); }
+#submit { padding: 12px 22px; }
+#lines th { font-size: 0.75rem; font-weight: 500; color: var(--muted); }
+#lines td { padding-block: 16px; }
+.addline { width: auto; background: var(--surface-soft); border-color: var(--border); border-radius: 11px; margin-top: 14px; }
+.review-facts { gap: 24px 48px; padding: 20px; border-radius: 14px; background: var(--surface-soft); }
+.review-lines li { padding: 16px 0; }
+.totals { background: var(--surface-soft); border-radius: 16px; padding: 24px; margin-block: 20px; }
+.totals > div:last-child b { font-size: 1.75rem; letter-spacing: -0.025em; }
+.recent-section { padding: 12px 24px; }
+.recent-invoice { padding-block: 24px; }
+.invoice-progress, .signed-copy-viewer { border: 1px solid rgb(255 255 255 / 75%); border-radius: 24px; box-shadow: 0 24px 80px rgb(0 0 0 / 18%); }
+.invoice-progress::backdrop, .signed-copy-viewer::backdrop { background: rgb(25 25 30 / 35%); backdrop-filter: blur(5px); }
+#signatureCanvas { border: 1.5px solid #929299; border-radius: 16px; }
+.completion-notice { padding: 24px; background: #edf7f0; border: 1px solid #c9e0cf; border-radius: 18px; }
+.completion-notice h3 { font-size: 1.25rem; }
+
+@media (hover: hover) {
+  .type-choice:hover { background: #fff; border-color: color-mix(in srgb, var(--choice-color) 45%, white); box-shadow: 0 6px 20px rgb(0 0 0 / 6%); transform: translateY(-2px); }
+  button:not(:disabled):not(.type-choice):not(#nextStep):not(#submit):not(#saveSignature):not(.recent-primary):hover { background: #f0f0f3; }
+  #submit:not(:disabled):hover, #saveSignature:not(:disabled):hover { background: var(--accent-dark); }
+}
+
+@media (max-width: 700px) {
+  .wrap { padding: 0 18px 40px; }
+  header { min-height: 86px; margin-bottom: 24px; gap: 16px; }
+  h1 { font-size: 1.0625rem; }
+  #env { font-size: 0.6875rem; }
+  .type-picker { padding-top: 20px; }
+  .type-choices { margin-top: 28px; }
+  .type-choice { grid-template-columns: 48px minmax(0, 1fr); gap: 4px 16px; padding: 20px; border-radius: 18px; min-height: 108px; }
+  .type-choice svg { width: 48px; height: 48px; grid-row: 1 / 3; padding: 9px; border-radius: 14px; }
+  .type-choice strong { font-size: 1.0625rem; }
+  .type-choice .choice-next { grid-column: 2; white-space: normal; }
+  #form { padding: 18px 18px 24px; }
+  .flow-steps { gap: 2px; margin-bottom: 28px; }
+  .flow-steps button { padding: 9px 4px; font-size: 0.75rem; }
+  .grid, .pricing-settings { gap: 20px; }
+  input, select, #lines input { font-size: 1rem; }
+  #lines input { padding: 10px; }
+  .recent-section { padding-inline: 18px; }
+  .totals { padding: 20px; }
+  .invoice-progress { padding: 28px; }
+}
+
+@media (max-width: 380px) {
+  header { flex-wrap: wrap; gap: 8px; }
+  #env { max-width: 100%; }
+  .flow-steps button { font-size: 0.6875rem; }
+  .flow-actions { gap: 8px; }
+  .flow-actions button { padding-inline: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  button:not(:disabled):active, .type-choice:hover { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  header { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .invoice-progress::backdrop, .signed-copy-viewer::backdrop { backdrop-filter: none; background: rgb(25 25 30 / 60%); }
+}
+@media (prefers-contrast: more) {
+  :root { --muted: #424247; --border: #85858c; }
+  header { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .card, .type-choice, .invoice-progress, .signed-copy-viewer { border: 1px solid var(--border); }
+  .flow-steps button:disabled { opacity: 1; }
+}

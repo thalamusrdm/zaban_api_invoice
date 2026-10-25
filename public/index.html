@@ -161,11 +161,12 @@
   @media (max-width: 700px) { .type-picker { padding-top: 8px; } .type-choices { grid-template-columns: 1fr; gap: 12px; margin-top: 20px; } .type-choice { min-height: 100px; padding: 16px; display: grid; grid-template-columns: 40px 1fr; gap: 6px 16px; align-items: center; } .type-choice svg { grid-row: 1 / 3; } .type-choice strong { font-size: 19px; } .type-choice .choice-next { grid-column: 2; } .invoice-heading { align-items: flex-start; flex-wrap: wrap; } }
 </style>
 <link rel="stylesheet" href="/invoice-flow.css">
+<link rel="stylesheet" href="/apple-design.css">
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>הפקת חשבונית מס</h1>
+    <div class="workspace-title"><span class="workspace-caption">Priority · סביבת עבודה</span><h1>הפקת חשבונית מס</h1></div>
     <span id="env"><span id="envText">בודק חיבור…</span><span class="dot"></span></span>
   </header>
 
@@ -256,9 +257,9 @@
       <div hidden><label for="invoiceType">סוג חשבונית</label><select id="invoiceType" required>
         <option value="1">זהב</option><option value="2">יהלומים</option><option value="4">תכשיטים בשיבוץ יהלומי מעבדה</option>
       </select></div>
-      <div><label for="warehouse">מחסן שולח</label><input id="warehouse" maxlength="4" list="warehouseOptions" placeholder="ברירת המחדל בפריוריטי"><datalist id="warehouseOptions"></datalist></div>
+      <div><label for="warehouse">מחסן שולח</label><input id="warehouse" maxlength="4" list="warehouseOptions" value="1" placeholder="ברירת המחדל בפריוריטי"><datalist id="warehouseOptions"></datalist></div>
       <div><label for="location">איתור במחסן</label><input id="location" maxlength="14" placeholder="ברירת המחדל בפריוריטי"></div>
-      <div><label for="agent">סוכן</label><input id="agent" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי"><datalist id="agentOptions"></datalist></div>
+      <div><label for="agent">סוכן</label><input id="agent" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי" aria-describedby="agentSource"><datalist id="agentOptions"></datalist><p class="field-note" id="agentSource">אפשר לקבוע סוכן בכתובת באמצעות ‎?agent=40</p></div>
       <div><label for="booknum">חשבונית פנקס</label><input id="booknum" maxlength="48" placeholder="לא חובה"></div>
     </div>
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
@@ -351,6 +352,22 @@ const VAT_RATE = 0.18;
 const fmt = n => (Number(n) || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₪';
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// The agent link determines attribution for this session and subsequent invoices.
+(() => {
+  const agent = new URLSearchParams(window.location.search).get('agent');
+  if (agent === null) return;
+  const field = $('agent');
+  if (!/^\d{1,16}$/.test(agent)) {
+    field.setCustomValidity('מספר הסוכן בכתובת אינו תקין. יש להזין בפרמטר agent מספר של עד 16 ספרות.');
+    $('agentSource').textContent = 'מספר הסוכן בכתובת אינו תקין. תקנו את הקישור, למשל ‎?agent=40';
+    field.closest('details').open = true;
+    return;
+  }
+  field.value = field.defaultValue = agent;
+  field.readOnly = true;
+  $('agentSource').textContent = `סוכן ${agent} נקבע מהקישור. להחלפת סוכן יש לשנות את הפרמטר agent בכתובת.`;
+})();
+
 async function api(path, opts) {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
@@ -364,7 +381,7 @@ async function api(path, opts) {
     for (const [id, values] of [['warehouseOptions', options.warehouses], ['agentOptions', options.agents]]) {
       $(id).replaceChildren(...values.map(x => new Option(`${x.code} — ${x.label}`, x.code)));
     }
-    $('optionsStatus').textContent = 'הצעות מתוך חשבוניות אחרונות. שדות ריקים למחסן, איתור וסוכן ייקבעו בפריוריטי.';
+    $('optionsStatus').textContent = 'מחסן ברירת המחדל הוא 1. הסוכן נקבע מהקישור, אם הוגדר בו. שדות ריקים ייקבעו בפריוריטי.';
   } catch {
     $('optionsStatus').textContent = 'הצעות למחסנים ולסוכנים אינן זמינות כרגע. אפשר להזין קוד ידנית או להשאיר ריק לברירת המחדל בפריוריטי.';
   }
