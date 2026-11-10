@@ -69,6 +69,8 @@
   .cust-list div:hover, .cust-list div.active { background: #faf3e0; }
   .cust-list .num { color: var(--muted); font-size: 13px; margin-inline-start: 8px; }
   #custChosen { font-size: 13px; color: var(--ok); min-height: 18px; margin-top: 4px; }
+  #customerDelivery { margin-top: 10px; }
+  #customerDelivery label[for="customerPhone"] { margin-top: 10px; }
 
   /* פאנל "נתוני חברה" של הלקוח הנבחר (נדרש למספר הקצאה) */
   #custInfo { display: none; margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; background: #fafbfc; }
@@ -215,6 +217,16 @@
         <div class="cust-list" id="custList" hidden></div>
         <div id="custChosen"></div>
         <input type="hidden" id="custname">
+        <div id="customerDelivery" hidden>
+          <label for="customerEmail">מייל לקבלת חשבוניות</label>
+          <input id="customerEmail" type="email" dir="ltr" maxlength="68" autocomplete="email"
+                 required disabled aria-describedby="customerDeliveryNote customerDeliveryStatus">
+          <label for="customerPhone">מספר טלפון של הלקוח</label>
+          <input id="customerPhone" type="tel" dir="ltr" maxlength="64" autocomplete="tel"
+                 disabled aria-describedby="customerDeliveryNote customerDeliveryStatus">
+          <p class="field-note" id="customerDeliveryNote">במעבר למוצרים נשמור את המייל ושינויים בטלפון בכרטיס הלקוח בפריוריטי ונסמן בו ״מקבל מסמך ממוחשב״.</p>
+          <p class="field-note" id="customerDeliveryStatus" role="status"></p>
+        </div>
         <div id="custInfo">
           <h4><span>פרטי לקוח ומספר הקצאה</span><button type="button" class="mini-btn" id="custEditBtn">עריכה</button></h4>
           <div class="rows" id="custRows"></div>
@@ -265,25 +277,23 @@
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
     </details>
     </section>
-    <section class="flow-panel" id="productsStep" aria-labelledby="productsStepTitle" hidden>
+    <section class="flow-panel" id="productsStep" aria-labelledby="productsStepTitle" data-gold hidden>
     <h2 id="productsStepTitle" tabindex="-1">מה מוסיפים לחשבונית?</h2>
-    <p class="step-intro">בחרו מוצר והזינו כמות. המחיר והשער מתמלאים אוטומטית.</p>
-    <p class="field-note" id="goldStatus" role="status" hidden></p>
+    <p class="step-intro" id="pricingIntro">בחרו מוצר והזינו כמות בגרמים ומחיר בש״ח לגרם.</p>
     <div class="table-scroll" role="region" aria-label="שורות החשבונית" tabindex="0">
     <table id="lines">
-      <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col">מחיר ($)</th><th scope="col" hidden>מטבע מחיר</th><th scope="col">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
+      <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col" id="priceHeading">מחיר בש״ח לגרם</th><th scope="col" hidden>מטבע מחיר</th><th scope="col" class="pricing-exchange">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
     <button type="button" class="addline" id="addLine">+ הוספת שורה</button>
     <details class="optional-fields">
-      <summary>הנחות ושער דולר <span>הגדרות ומקור המחירים</span></summary>
+      <summary>הנחות<span class="pricing-exchange"> ושער דולר</span></summary>
       <div class="pricing-settings">
         <div><label for="discount">הנחה לשורות (%)</label><input id="discount" type="number" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote"><p class="field-note" id="discountNote">חלה על שורות חדשות ושורות שלא שיניתם בהן הנחה. אין הנחה נוספת על הסכום הכולל.</p></div>
-        <div><label class="checkbox-label"><input type="checkbox" id="useBoiRates" checked>שער דולר מבנק ישראל</label><p class="field-note">ללא סימון: שער מפריוריטי לפי מטבע המוצר (USD או $).</p><p class="field-note" id="exchangeStatus" role="status">טוען שער דולר מבנק ישראל…</p></div>
+        <div class="pricing-exchange"><label class="checkbox-label"><input type="checkbox" id="useBoiRates" autocomplete="off">שער דולר מבנק ישראל</label><p class="field-note" id="exchangeSourceNote"></p><p class="field-note" id="exchangeStatus" role="status"></p></div>
       </div>
       <p class="field-note" id="selectedTypeNote"></p>
-      <p class="field-note">הכמות לפי יחידת המוצר בפריוריטי. המחיר בדולרים לפני מע״מ והנחה, והשער נעול לעריכה.</p>
     </details>
     </section>
     <section class="flow-panel" id="reviewStep" aria-labelledby="reviewStepTitle" hidden>
@@ -438,6 +448,7 @@ custSearch.addEventListener('focus', () => {
 
 custSearch.addEventListener('input', () => {
   $('custname').value = '';
+  clearCustomerDelivery();
   loadRecent();
   $('custChosen').textContent = '';
   renderCustDetails(null);
@@ -505,20 +516,99 @@ function renderCustDetails(d) {
   info.classList.add('show');
 }
 
-let digitalCustomerRequest=0;
+let digitalCustomerRequest = 0;
+let digitalCustomerLoad;
+let digitalCustomerProfile;
+
+function clearCustomerDelivery() {
+  digitalCustomerRequest++;
+  digitalCustomerLoad = digitalCustomerProfile = null;
+  $('customerDelivery').hidden = true;
+  $('customerEmail').value = '';
+  $('customerEmail').disabled = true;
+  $('customerPhone').value = '';
+  $('customerPhone').disabled = true;
+  $('customerDeliveryStatus').textContent = '';
+  $('digitalStatus').textContent = 'יש לבחור לקוח לבדיקת הגדרת מסמך ממוחשב בפריוריטי.';
+}
+
+function showCustomerDelivery(profile) {
+  digitalCustomerProfile = profile;
+  $('customerEmail').value = profile.email;
+  $('customerPhone').value = profile.phone ?? '';
+  $('customerDeliveryStatus').textContent = profile.digital
+    ? 'הלקוח מוגדר לקבלת מסמך ממוחשב בפריוריטי.'
+    : 'קבלת מסמך ממוחשב תופעל במעבר למוצרים.';
+  $('digitalStatus').textContent = $('customerDeliveryStatus').textContent;
+}
+
+async function loadCustomerDelivery(custname, request) {
+  $('customerDelivery').hidden = false;
+  $('customerDeliveryStatus').textContent = 'טוען מייל, טלפון והגדרת מסמך ממוחשב מפריוריטי…';
+  try {
+    const profile = await api('/api/customers/digital?custname=' + encodeURIComponent(custname));
+    if (request !== digitalCustomerRequest) return;
+    showCustomerDelivery(profile);
+    $('customerEmail').disabled = false;
+    $('customerPhone').disabled = false;
+  } catch (error) {
+    if (request !== digitalCustomerRequest) return;
+    $('customerDeliveryStatus').textContent = 'טעינת הפרטים נכשלה. לחצו שוב על המשך למוצרים כדי לנסות שוב. ' + error.message;
+  } finally {
+    if (request === digitalCustomerRequest) digitalCustomerLoad = null;
+  }
+}
+
+async function saveCustomerDelivery() {
+  const custname = $('custname').value;
+  const request = digitalCustomerRequest;
+  if (!digitalCustomerProfile) {
+    await (digitalCustomerLoad ||= loadCustomerDelivery(custname, request));
+    if (request !== digitalCustomerRequest || !digitalCustomerProfile) return false;
+  }
+  const field = $('customerEmail');
+  if (!field.reportValidity()) return false;
+  const email = field.value.trim();
+  const phoneField = $('customerPhone');
+  const phone = phoneField.value.trim();
+  const changes = { custname, email };
+  if (phone !== (digitalCustomerProfile.phone ?? '').trim()) changes.phone = phone;
+  const status = $('customerDeliveryStatus');
+  field.disabled = true;
+  phoneField.disabled = true;
+  status.textContent = 'שומר ומאמת את פרטי הלקוח בפריוריטי…';
+  try {
+    const saved = await api('/api/customers/digital', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(changes),
+    });
+    if (request !== digitalCustomerRequest) return false;
+    showCustomerDelivery(saved);
+    return true;
+  } catch (error) {
+    if (request === digitalCustomerRequest) status.textContent = 'לא ניתן לאמת את פרטי הלקוח. ' + error.message;
+    return false;
+  } finally {
+    if (request === digitalCustomerRequest) {
+      field.disabled = false;
+      phoneField.disabled = false;
+    }
+  }
+}
+
 async function loadCustDetails(custname) {
   loadRecent();
-  const request=++digitalCustomerRequest;
-  $('digitalStatus').textContent='בודק הגדרת מסמך ממוחשב בפריוריטי…';
-  api('/api/customers/digital?custname='+encodeURIComponent(custname)).then(profile=>{
-    if(request!==digitalCustomerRequest || $('custname').value!==custname)return;
-    $('digitalStatus').textContent=profile.digital ? 'הלקוח מוגדר לקבלת מסמך ממוחשב. המקור יורד ללא מייל.' : 'הלקוח אינו מוגדר כמקבל מסמך ממוחשב בפריוריטי. יש להסדיר זאת לפני ההפקה.';
-  }).catch(err=>{if(request===digitalCustomerRequest)$('digitalStatus').textContent='בדיקת מסמך ממוחשב נכשלה: '+err.message;});
+  clearCustomerDelivery();
+  renderCustDetails(null);
+  const request = digitalCustomerRequest;
+  digitalCustomerLoad = loadCustomerDelivery(custname, request);
   try {
-    renderCustDetails(await api('/api/customers/details?custname=' + encodeURIComponent(custname)));
+    const details = await api('/api/customers/details?custname=' + encodeURIComponent(custname));
+    if (request === digitalCustomerRequest) renderCustDetails(details);
   } catch (e) {
+    if (request !== digitalCustomerRequest) return;
     custDetails = null;
-    $('custRows').innerHTML = `<span class="missing" style="grid-column:1/-1">לא ניתן לטעון נתוני חברה: ${e.message}</span>`;
+    $('custRows').innerHTML = `<span class="missing" style="grid-column:1/-1">לא ניתן לטעון נתוני חברה: ${escapeHtml(e.message)}</span>`;
     $('custAlloc').innerHTML = '';
     $('custEdit').classList.remove('show');
     $('custInfo').classList.add('show');
@@ -552,12 +642,14 @@ $('custSaveBtn').addEventListener('click', async () => {
   const msgEl = $('custSaveMsg');
   if (!Object.keys(changed).length) { msgEl.textContent = 'אין שינויים'; return; }
   const btn = $('custSaveBtn');
+  const request = digitalCustomerRequest;
   btn.disabled = true; msgEl.style.color = 'var(--muted)'; msgEl.textContent = 'שומר בפריוריטי…';
   try {
     const d = await api('/api/customers/update', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ custname: custDetails.CUSTNAME, fields: changed }),
     });
+    if (request !== digitalCustomerRequest) return;
     renderCustDetails(d);
     showMsg('ok', `✔ נתוני הלקוח ${d.CUSTDES} (${d.CUSTNAME}) עודכנו בפריוריטי`);
   } catch (e) {
@@ -588,19 +680,26 @@ const exchangeRequests = new Map();
 let currentExchangeRates = null;
 const selectedRateSource = () => $('useBoiRates').checked ? 'boi' : 'priority';
 
+function invoiceExchangeRate(rate) {
+  return $('invoiceType').value === '2' && selectedRateSource() === 'boi'
+    ? Number((rate * 1.02).toFixed(6))
+    : rate;
+}
+
 function setLineExchange(tr) {
   const currency = tr.querySelector('.l-currency').value;
   const exchange = tr.querySelector('.l-exchange');
   const expectedSource = selectedRateSource() === 'boi' ? 'bank-of-israel' : 'priority';
   const info = currentExchangeRates?.date === $('date').value && currentExchangeRates.source === expectedSource ? currentExchangeRates.rates[currency] : null;
   exchange.readOnly = true;
-  exchange.value = currency === 'ש"ח' ? '1' : info?.rate ?? '';
+  exchange.value = currency === 'ש"ח' ? '1' : info ? invoiceExchangeRate(info.rate) : '';
   const label = selectedRateSource() === 'boi' ? 'בנק ישראל' : 'פריוריטי';
   exchange.title = currency === 'ש"ח' ? 'מטבע מקומי — שער 1' : info ? `שער מ${label} ליום ${info.rateDate} (${currency})` : 'ממתינים לשער מ' + label + ' — הפקת החשבונית תתאפשר לאחר טעינתו';
   exchange.placeholder = 'שער לש״ח';
 }
 
 async function loadExchangeRates() {
+  if ($('invoiceType').value === '1') return;
   const date = $('date').value;
   const source = selectedRateSource();
   const cacheKey = `${source}:${date}`;
@@ -612,14 +711,14 @@ async function loadExchangeRates() {
   if (!exchangeRequests.has(cacheKey)) exchangeRequests.set(cacheKey, api('/api/exchange-rates?date=' + encodeURIComponent(date) + '&source=' + source));
   try {
     const data = await exchangeRequests.get(cacheKey);
-    if ($('date').value !== date || selectedRateSource() !== source) return;
+    if ($('invoiceType').value === '1' || $('date').value !== date || selectedRateSource() !== source) return;
     currentExchangeRates = data;
     const info = data.rates.USD;
     $('exchangeStatus').textContent = source === 'boi'
-      ? `שער דולר יציג — בנק ישראל: ${info.rate} ₪ · פורסם ב־${info.rateDate}` + (info.rateDate < date ? ' · השער האחרון שפורסם עד תאריך החשבונית' : '')
+      ? `שער דולר מבנק ישראל${$('invoiceType').value === '2' ? ' בתוספת 2%' : ''}: ${invoiceExchangeRate(info.rate)} ₪ · פורסם ב־${info.rateDate}` + (info.rateDate < date ? ' · השער האחרון שפורסם עד תאריך החשבונית' : '')
       : 'פריוריטי: ' + Object.entries(data.rates).map(([code, rate]) => `${code}: ${rate.rate} ₪ · תאריך ${rate.rateDate}`).join(' | ');
   } catch (err) {
-    if ($('date').value !== date || selectedRateSource() !== source) return;
+    if ($('invoiceType').value === '1' || $('date').value !== date || selectedRateSource() !== source) return;
     $('exchangeStatus').textContent = 'שער הדולר אינו זמין: ' + err.message + ' יש לטעון שער תקין לפני הפקת החשבונית.';
   }
   for (const tr of tbody.rows) setLineExchange(tr);
@@ -628,58 +727,15 @@ async function loadExchangeRates() {
 $('date').addEventListener('change', loadExchangeRates);
 $('useBoiRates').addEventListener('change', loadExchangeRates);
 
-// Gold prices are a separate Priority quote; the checkbox only selects USD/ILS FX.
-const goldRequests = new Map();
-let currentGoldPrices = null;
-const isGoldPart = part => ['14', '18', 'F'].includes(part);
-
-function setGoldLinePrice(tr) {
-  const part = tr.dataset.goldPart;
-  if (!part) return;
-  const info = currentGoldPrices?.date === $('date').value ? currentGoldPrices.prices[part] : null;
-  const price = tr.querySelector('.l-price');
-  price.value = info?.price ?? '';
-  price.title = info ? `מחיר לגרם מלוג מחירי זהב בפריוריטי · ${currentGoldPrices.updatedAt} · נעול לעריכה` : 'ממתינים למחיר זהב מפריוריטי';
-  tr.querySelector('.l-currency').value = info?.currency || '$';
-  tr.querySelector('.l-desc').textContent = (tr.dataset.partDescription || part) + (info ? ` · לוג זהב: ${info.price} $ לגרם` : ' · ממתינים למחיר זהב');
-  setLineExchange(tr);
-}
-
-async function loadGoldPrices() {
-  const status = $('goldStatus');
-  status.hidden = $('invoiceType').value !== '1';
-  if (status.hidden) return;
-  const date = $('date').value;
-  currentGoldPrices = null;
-  for (const tr of tbody.rows) setGoldLinePrice(tr);
-  recalc();
-  if (!date || !$('date').validity.valid) { status.textContent = 'יש לבחור תאריך תקין לטעינת מחיר הזהב.'; return; }
-  status.textContent = 'טוען מחיר לגרם מלוג מחירי זהב בפריוריטי…';
-  if (!goldRequests.has(date)) goldRequests.set(date, api('/api/gold-prices?date=' + encodeURIComponent(date)));
-  try {
-    const data = await goldRequests.get(date);
-    if ($('date').value !== date || $('invoiceType').value !== '1') return;
-    currentGoldPrices = data;
-    const stamp = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.updatedAt));
-    status.textContent = `מחירי הזהב נטענו מפריוריטי · עדכון ${stamp}`;
-  } catch (err) {
-    if ($('date').value !== date || $('invoiceType').value !== '1') return;
-    status.textContent = 'מחיר הזהב אינו זמין: ' + err.message;
-  }
-  for (const tr of tbody.rows) setGoldLinePrice(tr);
-  recalc();
-}
-$('date').addEventListener('change', loadGoldPrices);
-$('invoiceType').addEventListener('change', loadGoldPrices);
-
 function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = '1', price = '') {
+  const gold = $('invoiceType').value === '1';
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td class="part-cell"><input class="l-part" aria-label="מק״ט" maxlength="22" value="${escapeHtml(partname)}" required autocomplete="off" placeholder="מק&quot;ט או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
-    <td><input class="l-grams" aria-label="כמות" type="number" step="0.001" min="0.001" value="${grams}" required><span class="l-unit">לפי המוצר</span></td>
-    <td><input class="l-price" aria-label="מחיר ליחידה" type="number" step="0.01" min="0.01" value="${price}" readonly required></td>
-    <td hidden><select class="l-currency" aria-label="מטבע מחיר" tabindex="-1"><option value="USD">USD</option><option value="$">$</option></select></td>
-    <td><input class="l-exchange" aria-label="שער חליפין לש״ח" type="number" step="0.000001" min="0.000001" max="9999999.999999" value="1" readonly required></td>
+    <td><input class="l-grams" aria-label="כמות" type="number" step="0.001" min="0.001" value="${grams}" required><span class="l-unit">${gold ? 'גרם' : 'לפי המוצר'}</span></td>
+    <td><input class="l-price" aria-label="${gold ? 'מחיר בש״ח לגרם' : 'מחיר בדולרים ליחידה'}" type="number" step="0.01" min="0.01" value="${price}" ${gold ? '' : 'readonly'} required></td>
+    <td hidden><select class="l-currency" aria-label="מטבע מחיר" tabindex="-1">${gold ? '<option value="ש&quot;ח">ש״ח</option>' : '<option value="USD">USD</option><option value="$">$</option>'}</select></td>
+    <td class="pricing-exchange"><input class="l-exchange" aria-label="שער חליפין לש״ח" type="number" step="0.000001" min="0.000001" max="9999999.999999" value="1" readonly required></td>
     <td><input class="l-discount" aria-label="הנחה לשורה באחוזים" type="number" step="0.01" min="0" max="100" value="${Number($('discount').value) || 0}"></td>
     <td class="l-total" style="color:var(--muted)">—</td>
     <td><button type="button" class="del" title="מחיקת שורה">✕</button></td>`;
@@ -694,8 +750,8 @@ function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = 
       if (p && tr.isConnected && $('invoiceType').value === initialType && tr.querySelector('.l-part').value.trim() === partname) {
         const unit = p.PUNITNAME || p.UNITNAME || '';
         tr.querySelector('.l-desc').textContent = p.PARTDES || '';
-        tr.querySelector('.l-unit').textContent = unit || 'לפי המוצר';
-        if (!tr.querySelector('.l-price').value) applyPartPrice(tr, p);
+        tr.querySelector('.l-unit').textContent = gold ? 'גרם' : unit || 'לפי המוצר';
+        if (!gold && !tr.querySelector('.l-price').value) applyPartPrice(tr, p);
       }
     }).catch(() => {});
   }
@@ -731,6 +787,7 @@ $('invoiceType').addEventListener('change', () => {
   }
   recalc();
 });
+$('invoiceType').addEventListener('change', loadExchangeRates);
 
 // בחירת סוג החשבונית שומרת את פרטי הטופס ומעדכנת רק שורה שטרם מולאה.
 $('typePicker').addEventListener('click', e => {
@@ -747,9 +804,18 @@ $('typePicker').addEventListener('click', e => {
   if (!tbody.rows.length) addLine();
   const label = $('invoiceType').selectedOptions[0].textContent;
   $('selectedTypeTitle').textContent = 'חשבונית ' + label;
-  $('selectedTypeNote').textContent = choice.dataset.type === '1'
-    ? 'מק״טים 14, 18 ו־F: מחיר לגרם מלוג מחירי הזהב בפריוריטי לפי תאריך החשבונית. מק״ט 14 מוגדר כברירת מחדל.'
-    : 'החיפוש מציג רק מק״טים המתאימים לסוג החשבונית. המחיר והמטבע ממחירון הבסיס בפריוריטי.';
+  const gold = choice.dataset.type === '1';
+  $('productsStep').toggleAttribute('data-gold', gold);
+  $('priceHeading').textContent = gold ? 'מחיר בש״ח לגרם' : 'מחיר ($)';
+  $('pricingIntro').textContent = gold
+    ? 'בחרו מוצר והזינו כמות בגרמים ומחיר בש״ח לגרם.'
+    : 'בחרו מוצר והזינו כמות. המחיר והשער מתמלאים אוטומטית.';
+  $('selectedTypeNote').textContent = gold
+    ? 'מק״ט 14 מוגדר כברירת מחדל. הזינו מחיר לגרם לפני מע״מ והנחה.'
+    : 'המחיר והמטבע ממחירון הבסיס בפריוריטי. המחיר לפני מע״מ והנחה.';
+  $('exchangeSourceNote').textContent = choice.dataset.type === '2'
+    ? 'ללא סימון: שער מפריוריטי לפי מטבע המוצר. עם סימון: שער בנק ישראל בתוספת 2%.'
+    : 'ללא סימון: שער מפריוריטי לפי מטבע המוצר (USD או $).';
   $('selectedTypeTitle').focus();
   window.scrollTo(0, 0);
 });
@@ -770,7 +836,7 @@ function renderPartList(input, items, emptyMsg) {
   st.items = items; st.active = -1; partState.set(input, st);
   const list = partRow(input).querySelector('.part-list');
   list.innerHTML = items.length
-    ? items.map((p, i) => `<div data-i="${i}"><span class="code">${escapeHtml(p.PARTNAME)}</span><span>${escapeHtml(p.PARTDES || '')} <span class="sub">${escapeHtml(p.PUNITNAME || p.UNITNAME || '')}${$('invoiceType').value === '1' && isGoldPart(p.PARTNAME) ? ' · מחיר מלוג הזהב' : p.BASEPLPRICE > 0 && p.BASEPLCODE ? ' · ' + escapeHtml(p.BASEPLPRICE + ' ' + p.BASEPLCODE) : ' · אין מחיר בסיס זמין'}</span></span></div>`).join('')
+    ? items.map((p, i) => `<div data-i="${i}"><span class="code">${escapeHtml(p.PARTNAME)}</span><span>${escapeHtml(p.PARTDES || '')} <span class="sub">${$('invoiceType').value === '1' ? 'גרם · מחיר ידני בש״ח' : escapeHtml(p.PUNITNAME || p.UNITNAME || '') + (p.BASEPLPRICE > 0 && p.BASEPLCODE ? ' · ' + escapeHtml(p.BASEPLPRICE + ' ' + p.BASEPLCODE) : ' · אין מחיר בסיס זמין')}</span></span></div>`).join('')
     : `<div style="color:var(--muted);cursor:default">${emptyMsg}</div>`;
   list.hidden = false;
 }
@@ -797,23 +863,17 @@ function pickPart(input, i) {
 }
 
 function applyPartPrice(tr, p) {
+  if ($('invoiceType').value === '1') {
+    tr.querySelector('.l-unit').textContent = 'גרם';
+    return;
+  }
   const price = tr.querySelector('.l-price');
   const currency = tr.querySelector('.l-currency');
-  const exchange = tr.querySelector('.l-exchange');
-  delete tr.dataset.goldPart;
-  if ($('invoiceType').value === '1' && isGoldPart(p.PARTNAME)) {
-    tr.dataset.goldPart = p.PARTNAME;
-    tr.dataset.partDescription = [p.PARTDES, p.FAMILYDES].filter(Boolean).join(' · ');
-    tr.querySelector('.l-unit').textContent = 'גרם';
-    setGoldLinePrice(tr);
-    recalc(); return;
-  }
   const supported = ['$', 'USD'].includes(p.BASEPLCODE);
   price.value = supported && Number(p.BASEPLPRICE) > 0 ? p.BASEPLPRICE : '';
   currency.value = supported ? p.BASEPLCODE : 'USD';
   setLineExchange(tr);
   price.title = price.value ? 'מחיר בדולרים ממחירון הבסיס בפריוריטי, לפני הנחות — נעול לעריכה' : 'חסר מחיר בסיס בדולרים בפריוריטי — יש לעדכן את מחירון המוצר';
-  exchange.placeholder = exchange.readOnly ? '' : 'שער לש״ח';
   tr.querySelector('.l-desc').textContent += price.value
     ? ' · מחירון בסיס: ' + p.BASEPLPRICE + ' ' + p.BASEPLCODE
     : ' · חסר מחיר בסיס בדולרים — יש לעדכן בפריוריטי';
@@ -829,7 +889,6 @@ tbody.addEventListener('input', e => {
   clearTimeout(st.timer);
   hidePartList(input);
   partRow(input).querySelector('.l-price').value = '';
-  delete partRow(input).dataset.goldPart;
   delete partRow(input).dataset.selectedPart;
   partRow(input).querySelector('.l-desc').textContent = '';
   partRow(input).querySelector('.l-unit').textContent = 'לפי המוצר';
@@ -903,9 +962,12 @@ async function advanceScannedLine(input) {
         renderPartList(partInput, [exact], ''); pickPart(partInput, 0);
       }
     }
-    if (tr.dataset.goldPart && !currentGoldPrices) await loadGoldPrices();
-    if (!tr.isConnected || $('invoiceType').value !== type) return;
-    if (!Number(tr.querySelector('.l-price').value)) { showMsg('err', tr.dataset.goldPart ? 'טרם נטען מחיר זהב תקין מפריוריטי לתאריך החשבונית.' : 'למוצר שנסרק חסר מחיר בסיס בדולרים בפריוריטי.'); partInput.focus(); return; }
+    const price = tr.querySelector('.l-price');
+    if (!Number(price.value)) {
+      if (type === '1') price.focus();
+      else { showMsg('err', 'למוצר שנסרק חסר מחיר בסיס בדולרים בפריוריטי.'); partInput.focus(); }
+      return;
+    }
     hidePartList(partInput);
     const next = tr.nextElementSibling || addLine();
     const nextInput = next.querySelector('.l-part');
@@ -943,7 +1005,6 @@ function recalc() {
 }
 addLine();
 loadExchangeRates();
-loadGoldPrices();
 
 // ---------- שליחה ----------
 const msg = $('msg');
@@ -958,10 +1019,12 @@ $('form').addEventListener('submit', async e => {
   const lines = readLines();
   const missingPrice = lines.findIndex(line => !Number.isFinite(line.price) || line.price <= 0);
   if (missingPrice !== -1) {
-    showMsg('err', `בשורה ${missingPrice + 1} חסר מחיר בדולרים. יש להמתין לטעינה ולבחור מוצר עם מחיר תקין בפריוריטי.`);
+    showMsg('err', $('invoiceType').value === '1'
+      ? `בשורה ${missingPrice + 1} יש להזין מחיר בש״ח לגרם.`
+      : `בשורה ${missingPrice + 1} חסר מחיר בדולרים. בחרו מוצר עם מחיר תקין בפריוריטי.`);
     return;
   }
-  if (lines.some(line => !Number.isFinite(Number(line.exchange)) || Number(line.exchange) <= 0)) {
+  if (lines.some(line => line.currency !== 'ש"ח' && (!Number.isFinite(Number(line.exchange)) || Number(line.exchange) <= 0))) {
     showMsg('err', 'לא נטען שער דולר תקין לתאריך החשבונית. יש להמתין לטעינת השער או לרענן את הממשק.');
     return;
   }

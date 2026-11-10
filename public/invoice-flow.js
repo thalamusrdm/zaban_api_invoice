@@ -9,6 +9,7 @@ let completeSignatureFlow;
   const form = document.getElementById('form');
   let currentStep = 0;
   let signingInvoice = null;
+  let savingCustomer = false;
   const el = id => document.getElementById(id);
 
   function review() {
@@ -82,16 +83,23 @@ let completeSignatureFlow;
     return true;
   }
 
-  function navigate(index) {
-    if (el('submit').disabled) return;
+  async function navigate(index) {
+    if (el('submit').disabled || savingCustomer) return;
     if (signingInvoice ? index !== 3 : index === 3) return;
-    if (index > currentStep) {
-      for (let i = 0; i < index; i++) if (!validateStep(i)) return;
+    if (index > currentStep && !validateStep(0)) return;
+    if (currentStep === 0 && index > 0) {
+      if (!el('custname').value) {
+        el('custname').value = el('custSearch').value.trim();
+        loadCustDetails(el('custname').value);
+      }
+      savingCustomer = el('nextStep').disabled = true;
+      try {
+        if (!await saveCustomerDelivery()) return;
+      } finally {
+        savingCustomer = el('nextStep').disabled = false;
+      }
     }
-    if (index > 0 && !el('custname').value && /^\d+$/.test(el('custSearch').value.trim())) {
-      el('custname').value = el('custSearch').value.trim();
-      loadCustDetails(el('custname').value);
-    }
+    if (index > currentStep && index === 2 && !validateStep(1)) return;
     showStep(index);
   }
 
@@ -114,13 +122,13 @@ let completeSignatureFlow;
     }
     if (event.defaultPrevented || event.key !== 'Enter' || currentStep >= 2 || event.target.tagName !== 'INPUT') return;
     event.preventDefault();
-    navigate(currentStep + 1);
+    return navigate(currentStep + 1);
   });
   form.addEventListener('submit', event => {
     if (currentStep !== 2) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (currentStep < 2) navigate(currentStep + 1);
+      if (currentStep < 2) return navigate(currentStep + 1);
     }
   }, true);
   // Once creation clears the lines, leave the old review before the next invoice.
@@ -146,6 +154,7 @@ let completeSignatureFlow;
     el('documentMsg').className = 'msg';
     el('custSearch').value = '';
     el('custname').value = '';
+    clearCustomerDelivery();
     if (typeof loadRecent === 'function') loadRecent();
     el('custChosen').textContent = '';
     el('custInfo').classList.remove('show');

@@ -329,6 +329,19 @@ const handlers = {
     const custname=(q.get('custname')||'').trim();if(!custname || custname.length>16)throw badRequest('חסר מספר לקוח תקין');
     return sdk.digitalCustomerForm(custname);
   },
+  'POST /api/customers/digital': async (_q, body) => {
+    const custname = String(body?.custname || '').trim();
+    if (!custname || custname.length > 16) throw badRequest('חסר מספר לקוח תקין');
+    const email = digital.emailAddress(body?.email);
+    if (body.phone === undefined) return sdk.prepareDigitalCustomer(custname, email);
+    if (typeof body.phone !== 'string') throw badRequest('יש להזין מספר טלפון תקין');
+    const phone = body.phone.trim();
+    if (phone && (phone.length > 64 || !/^\+?[\d(). /-]+(?: *(?:x|ext\.?|#|שלוחה) *\d+)?$/i.test(phone)
+        || phone.replace(/\D/g, '').length < 5)) {
+      throw badRequest('יש להזין מספר טלפון תקין');
+    }
+    return sdk.prepareDigitalCustomer(custname, email, phone);
+  },
   'POST /api/invoices/digital-preflight': async (_q,body) => {
     const email=digital.digitalConsent(body);const custname=String(body.custname||'').trim();
     if(!custname || custname.length>16)throw badRequest('חסר מספר לקוח תקין');
@@ -568,6 +581,10 @@ const server = http.createServer(async (req, res) => {
   const key = `${req.method} ${url.pathname}`;
 
   if (handlers[key]) {
+    if (key === 'POST /api/customers/digital' && !/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) {
+      res.writeHead(415, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: 'יש לשלוח את הגדרות הלקוח בפורמט JSON' }));
+    }
     let body = null;
     if (req.method === 'POST') {
       const chunks = [];

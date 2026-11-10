@@ -52,7 +52,7 @@ const assert = require('node:assert/strict');
     const res = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(5000) });
     assert.equal(res.status, 200);
     const html = await res.text();
-    assert.ok(html.includes('useBoiRates') && html.includes('goldStatus'));
+    assert.ok(html.includes('id="useBoiRates"') && html.includes('id="priceHeading"') && html.includes('id="customerPhone"'));
     console.log('PASS: extracted BAT starts with only System32 in PATH; bundled runtime serves current invoice UI.');
   } finally {
     if (child.pid && child.exitCode === null) execFileSync(path.join(system32, 'taskkill.exe'), ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });

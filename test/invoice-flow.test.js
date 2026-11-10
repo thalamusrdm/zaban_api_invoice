@@ -5,11 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function flow() {
+function flow(saveCustomerDelivery = async () => true) {
   class Element {
     constructor() { this.listeners = {}; this.attributes = {}; this.hidden = false; this.value = ''; this.fields = []; this.children = []; this.tagName = 'INPUT'; this.classList={remove(){}}; }
     addEventListener(type, handler) { (this.listeners[type] ||= []).push(handler); }
-    fire(type, event = {}) { for (const handler of this.listeners[type] || []) handler(event); }
+    async fire(type, event = {}) { for (const handler of this.listeners[type] || []) await handler(event); }
     setAttribute(key, value) { this.attributes[key] = value; }
     removeAttribute(key) { delete this.attributes[key]; }
     contains(field) { return this.fields.includes(field); }
@@ -39,26 +39,92 @@ function flow() {
     window:{scrollTo(){}},
     document: {getElementById:id => elements[id], querySelectorAll:() => buttons, createElement:() => new Element()},
     loadCustDetails() { customerLoads++; },
+    saveCustomerDelivery,
+    clearCustomerDelivery() {},
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/invoice-flow.js'), 'utf8'), context);
   return { elements, panels, row, buttons, complete:() => vm.runInNewContext('completeSignatureFlow("IN-TEST-DOR")',context), sign:() => vm.runInNewContext('showSignatureFlow("IN-TEST-DOR")', context), reset:() => vm.runInNewContext('resetInvoiceFlow()', context), get customerLoads() { return customerLoads; } };
 }
 
-test('flow validates each stage, preserves entries and builds the review before issuance', () => {
+test('flow validates each stage, preserves entries and builds the review before issuance', async () => {
   const ui = flow(), e = ui.elements;
-  e.nextStep.fire('click');
+  await e.nextStep.fire('click');
   assert.equal(ui.panels[1].hidden, false);
-  e.nextStep.fire('click');
+  await e.nextStep.fire('click');
   assert.equal(ui.panels[2].hidden, false);
   assert.equal(e.reviewCustomer.textContent, 'דור עזריאל - יועץ');
   assert.equal(e.reviewDate.textContent, '24.10.2026');
   assert.equal(e.reviewLines.children[0].children[1].textContent, '496.00 ₪');
-  e.previousStep.fire('click'); e.previousStep.fire('click');
+  await e.previousStep.fire('click'); await e.previousStep.fire('click');
   assert.equal(e.custSearch.value, 'דור עזריאל - יועץ');
   assert.equal(ui.row.selectors['.l-grams'].value, '2');
 });
 
-test('verified signature completion returns to the first page with thanks and clears customer selection',()=>{
+test('customer step waits for Priority, stays open on failure and allows a retry', async () => {
+  let resolveSave;
+  let calls = 0;
+  const ui = flow(() => {
+    calls++;
+    return new Promise(resolve => { resolveSave = resolve; });
+  });
+  const first = ui.elements.nextStep.fire('click');
+  assert.equal(ui.elements.nextStep.disabled, true);
+  assert.equal(ui.panels[0].hidden, false);
+  await ui.buttons[2].fire('click');
+  assert.equal(calls, 1);
+  resolveSave(false);
+  await first;
+  assert.equal(ui.panels[0].hidden, false);
+  const retry = ui.elements.nextStep.fire('click');
+  resolveSave(true);
+  await retry;
+  assert.equal(ui.panels[1].hidden, false);
+  await ui.elements.nextStep.fire('click');
+  assert.equal(ui.panels[2].hidden, false);
+  assert.equal(calls, 2);
+});
+
+test('customer contact fields ignore late responses and save edits for the selected customer', async () => {
+  const fields = Object.fromEntries(
+    ['custname', 'customerDelivery', 'customerEmail', 'customerPhone', 'customerDeliveryStatus', 'digitalStatus']
+      .map(id => [id, { value: '', reportValidity() { return true; } }]),
+  );
+  const loads = new Map();
+  const writes = [];
+  const context = {
+    $: id => fields[id],
+    api(url, options) {
+      if (options) {
+        const record = JSON.parse(options.body);
+        writes.push(record);
+        return Promise.resolve({ phone: '050-5550123', ...record, digital: true });
+      }
+      return new Promise(resolve => loads.set(url.split('=').at(-1), resolve));
+    },
+  };
+  const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+  vm.runInNewContext(html.slice(html.indexOf('let digitalCustomerRequest'), html.indexOf('async function loadCustDetails')), context);
+  const select = custname => {
+    fields.custname.value = custname;
+    return vm.runInNewContext('clearCustomerDelivery(); loadCustomerDelivery($("custname").value, digitalCustomerRequest)', context);
+  };
+  const first = select('FIRST');
+  const second = select('SECOND');
+  loads.get('SECOND')({ email: 'second@example.com', phone: '050-5550123', digital: false });
+  await second;
+  loads.get('FIRST')({ email: 'first@example.com', phone: '050-5550124', digital: true });
+  await first;
+  assert.equal(fields.customerEmail.value, 'second@example.com');
+  assert.equal(fields.customerPhone.value, '050-5550123');
+  fields.customerEmail.value = 'corrected@example.com';
+  assert.equal(await vm.runInNewContext('saveCustomerDelivery()', context), true);
+  assert.deepEqual(writes, [{ custname: 'SECOND', email: 'corrected@example.com' }]);
+  fields.customerPhone.value = '+972 50-555-0125';
+  assert.equal(await vm.runInNewContext('saveCustomerDelivery()', context), true);
+  assert.deepEqual(writes[1], { custname: 'SECOND', email: 'corrected@example.com', phone: '+972 50-555-0125' });
+});
+
+test('verified signature completion returns to the first page with thanks and clears customer selection', async () => {
   const ui=flow();ui.sign();ui.complete();
   assert.equal(ui.elements.invoiceScreen.hidden,true);
   assert.equal(ui.elements.typePicker.hidden,false);
@@ -68,9 +134,9 @@ test('verified signature completion returns to the first page with thanks and cl
   assert.equal(ui.elements.completionTitle.focused,true);
 });
 
-test('signature is the fourth step and cannot reissue or edit an invoice already created', () => {
+test('signature is the fourth step and cannot reissue or edit an invoice already created', async () => {
   const ui=flow(),e=ui.elements;
-  ui.buttons[3].fire('click');
+  await ui.buttons[3].fire('click');
   assert.equal(ui.panels[3].hidden,true);
   ui.sign();
   assert.equal(ui.panels[3].hidden,false);
@@ -78,10 +144,10 @@ test('signature is the fourth step and cannot reissue or edit an invoice already
   assert.equal(e.nextStep.hidden,true);
   assert.equal(e.previousStep.hidden,true);
   assert.equal(e.changeType.disabled,true);
-  ui.buttons[0].fire('click');
+  await ui.buttons[0].fire('click');
   assert.equal(ui.panels[3].hidden,false);
   let prevented=false;
-  e.form.fire('keydown',{key:'Enter',target:{tagName:'INPUT'},preventDefault(){prevented=true;}});
+  await e.form.fire('keydown',{key:'Enter',target:{tagName:'INPUT'},preventDefault(){prevented=true;}});
   assert.equal(prevented,true);
   ui.reset();
   assert.equal(ui.panels[0].hidden,false);
@@ -89,43 +155,43 @@ test('signature is the fourth step and cannot reissue or edit an invoice already
   assert.equal(ui.buttons[3].disabled,true);
 });
 
-test('jumping to review cannot skip invalid customers or missing product prices', () => {
+test('jumping to review cannot skip invalid customers or missing product prices', async () => {
   const ui = flow(), e = ui.elements;
   e.custname.value = '';
-  ui.buttons[2].fire('click');
+  await ui.buttons[2].fire('click');
   assert.equal(ui.panels[0].hidden, false);
   assert.equal(e.stepStatus.hidden, false);
   e.custSearch.value = '301100';
-  e.nextStep.fire('click');
+  await e.nextStep.fire('click');
   assert.equal(e.custname.value, '301100');
   assert.equal(ui.customerLoads, 1);
   ui.row.selectors['.l-price'].value = '';
-  ui.buttons[2].fire('click');
+  await ui.buttons[2].fire('click');
   assert.equal(ui.panels[1].hidden, false);
   assert.equal(ui.panels[2].hidden, true);
 });
 
-test('native invalid events reveal hidden fields and open their optional settings', () => {
+test('native invalid events reveal hidden fields and open their optional settings', async () => {
   const ui = flow(), e = ui.elements;
-  e.nextStep.fire('click');
+  await e.nextStep.fire('click');
   const details = {tagName:'DETAILS', parentElement:e.form, open:false};
   e.date.parentElement = details;
-  e.form.fire('invalid', {target:e.date});
+  await e.form.fire('invalid', {target:e.date});
   assert.equal(ui.panels[0].hidden, false);
   assert.equal(details.open, true);
 });
 
-test('early submit advances without issuing; handled scanner Enter is preserved', () => {
+test('early submit advances without issuing; handled scanner Enter is preserved', async () => {
   const ui = flow(), e = ui.elements;
   let prevented = false, stopped = false;
-  e.form.fire('submit', {preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; }});
+  await e.form.fire('submit', {preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; }});
   assert.equal(prevented, true); assert.equal(stopped, true);
   assert.equal(ui.panels[1].hidden, false);
-  e.form.fire('keydown', {key:'Enter', defaultPrevented:true, target:ui.row.selectors['.l-part']});
+  await e.form.fire('keydown', {key:'Enter', defaultPrevented:true, target:ui.row.selectors['.l-part']});
   assert.equal(ui.panels[1].hidden, false);
-  e.nextStep.fire('click');
+  await e.nextStep.fire('click');
   prevented = false; stopped = false;
-  e.form.fire('submit', {preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; }});
+  await e.form.fire('submit', {preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; }});
   assert.equal(prevented, false); assert.equal(stopped, false);
   ui.reset();
   assert.equal(ui.panels[0].hidden, false);

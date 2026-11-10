@@ -35,9 +35,9 @@ function isolatedServer(getResponse, responseStatus = 200, sdk = {}, store, orig
   });
   return {
     calls,
-    async request(method, url, body) {
+    async request(method, url, body, contentType = 'application/json') {
       const req = Readable.from(body ? [Buffer.from(JSON.stringify(body))] : []);
-      Object.assign(req, { method, url });
+      Object.assign(req, { method, url, headers: { 'content-type': contentType } });
       let status, text, headers;
       const res = { writeHead(code,values) { status = code; headers=values; }, end(value) { text = value; } };
       await handler(req, res);
@@ -93,6 +93,33 @@ test('invalid FX input returns 400 before any Priority request', async () => {
   const server = isolatedServer();
   const result = await server.request('POST', '/api/invoices', { custname: 'TEST', date: '2026-10-19', lines: [{ partname: 'TEST-PART', quantity: 1, price: 100, currency: '$' }] });
   assert.equal(result.status, 400);
+  assert.equal(server.calls.length, 0);
+});
+
+test('customer delivery validates one email and saves settings without creating an invoice', async () => {
+  const calls = [];
+  const server = isolatedServer(null, 200, { async prepareDigitalCustomer(custname, email, phone) {
+    const customer = { custname, email };
+    if (phone !== undefined) customer.phone = phone;
+    calls.push(customer);
+    return { ...customer, digital: true };
+  } });
+  const invalid = await server.request('POST', '/api/customers/digital', { custname: 'TEST', email: 'bad email' });
+  assert.equal(invalid.status, 400);
+  const wrongFormat = await server.request('POST', '/api/customers/digital', { custname: 'TEST', email: 'customer@example.com' }, 'text/plain');
+  assert.equal(wrongFormat.status, 415);
+  assert.equal(calls.length, 0);
+  const saved = await server.request('POST', '/api/customers/digital', { custname: 'TEST', email: ' customer@example.com ' });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(calls, [{ custname: 'TEST', email: 'customer@example.com' }]);
+  assert.deepEqual(saved.body, { ...calls[0], digital: true });
+  const contact = { custname: 'TEST', email: 'customer@example.com' };
+  const invalidPhone = await server.request('POST', '/api/customers/digital', { ...contact, phone: 'call me' });
+  assert.equal(invalidPhone.status, 400);
+  assert.equal(calls.length, 1);
+  const savedPhone = await server.request('POST', '/api/customers/digital', { ...contact, phone: ' +972 (50) 555-0123 ' });
+  assert.equal(savedPhone.status, 200);
+  assert.deepEqual(calls[1], { ...contact, phone: '+972 (50) 555-0123' });
   assert.equal(server.calls.length, 0);
 });
 

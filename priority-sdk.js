@@ -338,25 +338,35 @@ async function digitalCustomerForm(custname, change) {
     await withTimeout(form.setSearchFilter({or:0,ignorecase:1,QueryValues:[{field:'CUSTNAME',fromval:custname,op:'=',sort:0,isdesc:0}]}), 'digital customer filter');
     const row = (await withTimeout(form.getRows(1), 'digital customer data'))?.CUSTOMERS?.['1'];
     if (!row || row.CUSTNAME !== custname) throw Error('הלקוח לא נמצא בפריוריטי');
-    if (change) {
-      await form.setActiveRow(1);
-      if (row.EMAIL !== change.email) await form.fieldUpdate('EMAIL', change.email);
-      if (!['Y','1',1,true].includes(row.EDOCUMENTS)) await form.fieldUpdate('EDOCUMENTS','Y');
-      if (error) throw error;
-      await withTimeout(form.saveRow(0), 'save digital customer');
-      if (error) throw error;
-    }
     const requiredMissing=Object.entries(form.columns).filter(([key,col])=>col.mandatory===1 && col.readonly===0 && col.type!=='bool' && (row[key]===undefined || row[key]===null || row[key]==='')).map(([key,col])=>({field:key,title:col.title}));
     const blocked=['לא פעיל','מבוטל'].includes(row.STATDES);
-    return {requiredMissing,blocked,custname:row.CUSTNAME,name:row.CUSTDES,email:row.EMAIL||'',digital:['Y','1',1,true].includes(row.EDOCUMENTS),companyNumber:row.WTAXNUM||'',vatNumber:row.VATNUM||'',numberExplanation:row.WTAXNUMEXPL||''};
-  } finally { if (form) try { await form.endCurrentForm(); } catch {} }
+    const profile = {requiredMissing,blocked,custname:row.CUSTNAME,name:row.CUSTDES,email:row.EMAIL||'',phone:row.PHONE||'',digital:['Y','1',1,true].includes(row.EDOCUMENTS),companyNumber:row.WTAXNUM||'',vatNumber:row.VATNUM||'',numberExplanation:row.WTAXNUMEXPL||''};
+    if (!change) return profile;
+    if (blocked) throw Error('כרטיס הלקוח אינו פעיל בפריוריטי');
+    if (!profile.name) throw Error('חסר שם לקוח בפריוריטי');
+    if (change.phone !== undefined && !form.columns?.PHONE) throw Error('לא נמצא שדה טלפון בכרטיס הלקוח');
+    const missing = requiredMissing.filter(field => field.field !== 'EMAIL' && !(field.field === 'PHONE' && change.phone));
+    if (missing.length) throw Error('יש להשלים שדות חובה בכרטיס הלקוח בפריוריטי: ' + missing.map(field => field.title).join(', '));
+    const updatePhone = change.phone !== undefined && profile.phone !== change.phone;
+    if (profile.email === change.email && profile.digital && !updatePhone) return profile;
+
+    await withTimeout(form.setActiveRow(1), 'activate digital customer');
+    if (profile.email !== change.email) await withTimeout(form.fieldUpdate('EMAIL', change.email), 'update customer email');
+    if (updatePhone) await withTimeout(form.fieldUpdate('PHONE', change.phone), 'update customer phone');
+    if (!profile.digital) await withTimeout(form.fieldUpdate('EDOCUMENTS', 'Y'), 'enable electronic documents');
+    if (error) throw error;
+    await withTimeout(form.saveRow(0), 'save digital customer');
+    if (error) throw error;
+    return null;
+  } finally { if (form) try { await withTimeout(form.endCurrentForm(), 'close digital customer', 5000); } catch {} }
 }
-async function prepareDigitalCustomer(custname,email) {
-  const before=await digitalCustomerForm(custname);
-  if(before.blocked || before.requiredMissing?.length)throw Error('יש להשלים שדות חובה בכרטיס הלקוח בפריוריטי: '+(before.requiredMissing||[]).map(x=>x.title).join(', '));
-  await digitalCustomerForm(custname,{email});
-  const saved = await digitalCustomerForm(custname);
-  if (!saved.digital || saved.email !== email || !saved.name) throw Error('לא ניתן לאמת את המייל והגדרת המסמך הממוחשב בפריוריטי');
+async function prepareDigitalCustomer(custname,email,phone) {
+  const unchanged = await digitalCustomerForm(custname, {email,phone});
+  const saved = unchanged || await digitalCustomerForm(custname);
+  if (!saved.digital || saved.email !== email || !saved.name || saved.blocked || saved.requiredMissing.length) {
+    throw Error('לא ניתן לאמת את המייל והגדרת המסמך הממוחשב בפריוריטי');
+  }
+  if (phone !== undefined && saved.phone !== phone) throw Error('לא ניתן לאמת את מספר הטלפון בפריוריטי');
   return saved;
 }
 async function openDigitalInvoice(ivnum) {

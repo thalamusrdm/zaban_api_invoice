@@ -1,5 +1,47 @@
 'use strict';
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const path=require('node:path');
+
+test('customer setup saves contact details and electronic documents together and verifies persisted values', async () => {
+  const row = { CUSTNAME: 'TEST', CUSTDES: 'Test customer', EMAIL: '', PHONE: '', EDOCUMENTS: '' };
+  const writes = [];
+  let reads = 0;
+  const sdk = {
+    async login() {},
+    async formStart(name) {
+      assert.equal(name, 'CUSTOMERS');
+      const pending = {};
+      return {
+        columns: { EMAIL: { mandatory: 1, readonly: 0 }, PHONE: {}, EDOCUMENTS: { type: 'bool' } },
+        async setSearchFilter({ QueryValues }) { assert.equal(QueryValues[0].fromval, 'TEST'); },
+        async getRows() { reads++; return { CUSTOMERS: { 1: { ...row } } }; },
+        async setActiveRow(index) { assert.equal(index, 1); },
+        async fieldUpdate(field, value) { pending[field] = value; },
+        async saveRow() { writes.push({ ...pending }); Object.assign(row, pending); },
+        async endCurrentForm() {},
+      };
+    },
+  };
+  const context = {
+    module: { exports: {} },
+    process: { env: { PRIORITY_BASE_URL: 'https://test.invalid/odata/config' } },
+    setTimeout() { return { unref() {} }; },
+    require() { return sdk; },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../priority-sdk.js'), 'utf8'), context);
+  const { prepareDigitalCustomer } = context.module.exports;
+  const saved = await prepareDigitalCustomer('TEST', 'customer@example.com', '050-5550123');
+  assert.equal(saved.email, 'customer@example.com');
+  assert.equal(saved.phone, '050-5550123');
+  assert.equal(saved.digital, true);
+  assert.equal(reads, 2);
+  await prepareDigitalCustomer('TEST', 'customer@example.com', '050-5550123');
+  await prepareDigitalCustomer('TEST', 'corrected@example.com');
+  assert.deepEqual(writes, [
+    { EMAIL: 'customer@example.com', PHONE: '050-5550123', EDOCUMENTS: 'Y' },
+    { EMAIL: 'corrected@example.com' },
+  ]);
+});
+
 test('printing acknowledges client steps correctly and explicitly selects display, never email or signature',async()=>{
   let client=0,options,closed=0;
   const proc={async clientContinue(){client++;return {type:'documentOptions',formats:[{format:-1,selected:1}],proc};},async documentOptions(...args){options=args;return {type:'displayUrl',Urls:[{datauri:'data:application/pdf;base64,JVBERi0='}],proc};},async continueProc(){throw Error('Wrong continuation for client step');}};

@@ -45,6 +45,7 @@ h1 { font-size: 20px; }
 label { color: var(--text); margin-bottom: 6px; }
 .field-note { font-size: 13px; line-height: 1.6; }
 .optional-fields { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 8px; }
+#productsStep[data-gold] .pricing-exchange { display: none; }
 .invoice-fields { border: 0; padding: 12px 0 0; margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .pricing-settings { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; padding-top: 14px; }
 .checkbox-label { display: flex; gap: 8px; align-items: center; }
@@ -160,6 +161,7 @@ label { color: var(--text); margin-bottom: 6px; }
   #lines td:nth-child(1)::before { content: 'מק״ט / מוצר'; }
   #lines td:nth-child(2)::before { content: 'כמות'; }
   #lines td:nth-child(3)::before { content: 'מחיר ($)'; }
+  #productsStep[data-gold] #lines td:nth-child(3)::before { content: 'מחיר בש״ח לגרם'; }
   #lines td:nth-child(5)::before { content: 'שער לש״ח'; }
   #lines td:nth-child(6)::before { content: 'הנחה (%)'; }
   #lines td:nth-child(7)::before { content: 'סה״כ (₪)'; }
