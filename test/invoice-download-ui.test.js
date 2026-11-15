@@ -4,17 +4,18 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
-function workflow({closeError,downloadError,waitClose,digitalMode=false,downloadMode=false,consented=true,email='agent@example.com',preflightError}={}) {
-  const calls=[],messages=[],anchors=[],timers=[],progress=[]; let submit;
+function workflow({closeError,downloadError,waitClose,digitalMode=false,downloadMode=false,sendOriginalEmail=false,consented=true,email='agent@example.com',preflightError,mailError}={}) {
+  const calls=[],messages=[],anchors=[],timers=[],progress=[],bodies=[]; let submit;
   const button={disabled:false,textContent:'הפקה, סגירה והורדת PDF'};
   const retry={disabled:false,textContent:'הורדה חוזרת'};
   const notices={className:'',textContent:'',appendChild(a){anchors.push(a);}};
   const fields={submit:button,documentMsg:notices,form:{addEventListener(_,fn){submit=fn;}},details:{value:'ORDER-TEST'},custname:{value:'TEST'},date:{value:'2026-10-20'},invoiceType:{value:'1'},warehouse:{value:''},location:{value:''},agent:{value:''},booknum:{value:''}};
   if(digitalMode){fields.digitalEmailConsent={checked:consented};fields.invoiceEmail={value:email,checkValidity:()=>/^[^@ ]+@[^@ ]+\.[^@ ]+$/.test(email)};}
+  if(sendOriginalEmail){fields.sendOriginalEmail={checked:true};fields.customerEmail={value:email,reportValidity:()=>true};}
   const msg={className:'',querySelector(){return retry;}};
   class TestURL extends URL { static createObjectURL(){return 'blob:test';} static revokeObjectURL(){} }
   const ctx={InvoiceProgress:{show:stage=>progress.push('show:'+stage),update:stage=>progress.push(stage),hide:()=>progress.push('hide')},msg,$:id=>fields[id],async finishOriginalDownload(data){calls.push('original-finish:'+data.ivnum);},async finishDigitalInvoice(data){calls.push('digital-finish:'+data.ivnum);},readLines:()=>[{partname:'14',price:78.36,exchange:3.11}],tbody:{innerHTML:''},addLine(){},recalc(){},loadRecent(){},escapeHtml:String,fmt:String,confirm(){throw new Error('Unexpected confirmation in authorized one-click flow');},
-    async api(url,opts){calls.push(url);if(url.includes('/original-download-preflight')){if(preflightError)throw Error(preflightError);return {ok:true};}if(url.includes('/check'))return {value:[]};if(url.endsWith('/close')){if(waitClose)await waitClose;if(closeError)throw new Error(closeError);return {ivnum:'IN-TEST',status:'סופית',originalDownload:downloadMode,digitalEmail:digitalMode,email};}return {ivnum:'T-TEST',status:'טיוטא',total:100};},
+    async api(url,opts){calls.push(url);if(opts?.body)bodies.push({url,body:JSON.parse(opts.body)});if(url.endsWith('/email-original')){if(mailError)throw Error(mailError);return {acceptedByMailServer:true,email};}if(url.includes('/original-download-preflight')){if(preflightError)throw Error(preflightError);return {ok:true};}if(url.includes('/check'))return {value:[]};if(url.endsWith('/close')){if(waitClose)await waitClose;if(closeError)throw new Error(closeError);return {ivnum:'IN-TEST',status:'סופית',originalDownload:downloadMode,digitalEmail:digitalMode,sendOriginalEmail,email};}return {ivnum:'T-TEST',status:'טיוטא',total:100};},
     async fetch(url){calls.push(url);if(downloadError)throw new Error(downloadError);return {ok:true,headers:{get:()=> 'application/pdf'},blob:async()=>({size:10})};},
     document:{body:{appendChild(){}},createElement(){const a={click(){anchors.push(a);},remove(){}};return a;}},URL:TestURL,location:{href:'http://local/'},setTimeout(fn){timers.push(fn);},showMsg(type,text){messages.push({type,text});},
   };
@@ -22,7 +23,7 @@ function workflow({closeError,downloadError,waitClose,digitalMode=false,download
   const submitCode=html.slice(html.indexOf("$('form').addEventListener('submit'"),html.indexOf('// ---------- חשבוניות אחרונות'));
   const closeCode=html.slice(html.indexOf('async function closeInvoice('),html.lastIndexOf("document.addEventListener('click', e => {"));
   vm.runInNewContext(submitCode+'\n'+closeCode,ctx);
-  return {run:()=>submit({preventDefault(){}}),ctx,calls,messages,anchors,timers,button,retry,notices,fields,progress};
+  return {run:()=>submit({preventDefault(){}}),ctx,calls,messages,anchors,timers,button,retry,notices,fields,progress,bodies};
 }
 
 test('issuance shows progress until closing finishes, and releases it on failure',async()=>{
@@ -76,4 +77,29 @@ test('one-click no-email flow prepares and downloads the original then opens the
   const w=workflow({downloadMode:true});const signature=fs.readFileSync(path.join(__dirname,'../public/signature.js'),'utf8');const start=signature.indexOf('async function finishOriginalDownload(');const end=signature.indexOf('async function finishDigitalInvoice(',start);
   w.ctx.document.getElementById=id=>w.fields[id];w.ctx.openInvoiceForSigning=async ivnum=>w.calls.push('sign-copy:'+ivnum);vm.runInNewContext(signature.slice(start,end),w.ctx);await w.run();
   assert.deepEqual(w.calls,['/api/invoices/original-download-preflight','/api/invoices/check?details=ORDER-TEST','/api/invoices','/api/invoices/close','/api/invoices/prepare-original-download','/api/invoices/existing-original?ivnum=IN-TEST','sign-copy:IN-TEST']);assert.equal(w.anchors[0].download,'IN-TEST-original.pdf');
+});
+
+test('combined flow downloads and mails the saved original before signing, even if browser download fails',async()=>{
+  for(const downloadError of [undefined,'download offline']){
+    const w=workflow({downloadMode:true,sendOriginalEmail:true,downloadError});
+    const script=fs.readFileSync(path.join(__dirname,'../public/signature.js'),'utf8');
+    w.ctx.document.getElementById=id=>w.fields[id];w.ctx.openInvoiceForSigning=async ivnum=>w.calls.push('sign-copy:'+ivnum);
+    vm.runInNewContext(script.slice(script.indexOf('async function finishOriginalDownload('),script.indexOf('async function finishDigitalInvoice(')),w.ctx);
+    await w.run();
+    assert.equal(w.calls.filter(url=>url==='/api/invoices/email-original').length,1);
+    assert.equal(w.calls.at(-1),'sign-copy:IN-TEST');
+    assert.ok(w.calls.indexOf('/api/invoices/email-original')>w.calls.indexOf('/api/invoices/existing-original?ivnum=IN-TEST'));
+    const creation=w.bodies.find(item=>item.url==='/api/invoices').body;
+    assert.equal(creation.sendOriginalEmail,true);assert.equal(creation.consent,true);assert.equal(creation.email,'agent@example.com');
+    assert.match(w.notices.textContent,/שרת הדואר קיבל/);
+  }
+});
+test('mail failure leaves download available and still opens the existing invoice for signature',async()=>{
+  const w=workflow({downloadMode:true,sendOriginalEmail:true,mailError:'mail offline'});
+  const script=fs.readFileSync(path.join(__dirname,'../public/signature.js'),'utf8');
+  w.ctx.document.getElementById=id=>w.fields[id];w.ctx.openInvoiceForSigning=async ivnum=>w.calls.push('sign-copy:'+ivnum);
+  vm.runInNewContext(script.slice(script.indexOf('async function finishOriginalDownload('),script.indexOf('async function finishDigitalInvoice(')),w.ctx);
+  await w.run();assert.equal(w.anchors[0].download,'IN-TEST-original.pdf');
+  assert.equal(w.calls.at(-1),'sign-copy:IN-TEST');assert.match(w.notices.textContent,/mail offline/);
+  assert.equal(w.calls.filter(url=>url==='/api/invoices').length,1);
 });

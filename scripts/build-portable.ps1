@@ -40,7 +40,7 @@ Copy-Item -LiteralPath (Join-Path $nodeRoot 'LICENSE') -Destination (Join-Path $
 }
 $runtimeHash = (Get-FileHash -LiteralPath (Join-Path $runtimeDir 'node.exe') -Algorithm SHA256).Hash
 
-$files = @('server.js', 'digital-invoice.js', 'signature-fields.js', 'original-documents.js', 'priority-sdk.js', 'invoice-payload.js', 'exchange-rates.js', 'gold-rates.js', 'package.json', 'package-lock.json', 'start-server.bat', '.env.example')
+$files = @('server.js', 'digital-invoice.js', 'invoice-mail.js', 'signature-fields.js', 'original-documents.js', 'priority-sdk.js', 'invoice-payload.js', 'exchange-rates.js', 'gold-rates.js', 'package.json', 'package-lock.json', 'start-server.bat', '.env.example')
 foreach ($file in $files) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $appRoot }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'public') -Destination $appRoot -Recurse
 if ($IncludeConfig) {

@@ -156,6 +156,7 @@ let completeSignatureFlow;
     el('custname').value = '';
     clearCustomerDelivery();
     if (typeof loadRecent === 'function') loadRecent();
+    if (typeof loadAgentRecent === 'function') loadAgentRecent();
     el('custChosen').textContent = '';
     el('custInfo').classList.remove('show');
     el('custEdit').classList.remove('show');

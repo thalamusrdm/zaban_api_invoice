@@ -193,6 +193,14 @@
         <strong>תכשיטים בשיבוץ יהלומי מעבדה</strong><span class="choice-next">פתיחת חשבונית תכשיטים ←</span>
       </button>
     </div>
+    <section class="recent-section agent-recent" aria-labelledby="agentRecentTitle">
+      <div class="recent-toolbar">
+        <h3 id="agentRecentTitle">חשבוניות אחרונות של הסוכן</h3>
+        <button type="button" class="refresh" id="agentRefreshBtn" disabled>רענון</button>
+      </div>
+      <p class="field-note" id="agentRecentHint"></p>
+      <div id="agentRecentBody" aria-live="polite"></div>
+    </section>
   </section>
 
   <section id="invoiceScreen" hidden aria-labelledby="selectedTypeTitle">
@@ -222,10 +230,12 @@
           <input id="customerEmail" type="email" dir="ltr" maxlength="68" autocomplete="email"
                  required disabled aria-describedby="customerDeliveryNote customerDeliveryStatus">
           <label for="customerPhone">מספר טלפון של הלקוח</label>
-          <input id="customerPhone" type="tel" dir="ltr" maxlength="64" autocomplete="tel"
+          <input id="customerPhone" type="tel" inputmode="tel" dir="ltr" maxlength="64" autocomplete="tel"
                  disabled aria-describedby="customerDeliveryNote customerDeliveryStatus">
           <p class="field-note" id="customerDeliveryNote">במעבר למוצרים נשמור את המייל ושינויים בטלפון בכרטיס הלקוח בפריוריטי ונסמן בו ״מקבל מסמך ממוחשב״.</p>
           <p class="field-note" id="customerDeliveryStatus" role="status"></p>
+          <label class="checkbox-label"><input id="sendOriginalEmail" type="checkbox" disabled aria-describedby="originalMailStatus"> לשלוח את המקור גם למייל של הלקוח</label>
+          <p class="field-note" id="originalMailStatus" role="status">בודק זמינות משלוח במייל…</p>
         </div>
         <div id="custInfo">
           <h4><span>פרטי לקוח ומספר הקצאה</span><button type="button" class="mini-btn" id="custEditBtn">עריכה</button></h4>
@@ -264,14 +274,14 @@
       <p class="field-note">מומלץ למלא כדי למנוע חשבונית כפולה.</p>
     </div>
     <details class="optional-fields">
-    <summary>פרטים נוספים <span>מחסן, סוכן וחשבונית פנקס</span></summary>
+    <summary>פרטים נוספים <span>סוכן, מחסן וחשבונית פנקס</span></summary>
     <div class="invoice-fields">
       <div hidden><label for="invoiceType">סוג חשבונית</label><select id="invoiceType" required>
         <option value="1">זהב</option><option value="2">יהלומים</option><option value="4">תכשיטים בשיבוץ יהלומי מעבדה</option>
       </select></div>
-      <div><label for="warehouse">מחסן שולח</label><input id="warehouse" maxlength="4" list="warehouseOptions" value="1" placeholder="ברירת המחדל בפריוריטי"><datalist id="warehouseOptions"></datalist></div>
-      <div><label for="location">איתור במחסן</label><input id="location" maxlength="14" placeholder="ברירת המחדל בפריוריטי"></div>
-      <div><label for="agent">סוכן</label><input id="agent" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי" aria-describedby="agentSource"><datalist id="agentOptions"></datalist><p class="field-note" id="agentSource">אפשר לקבוע סוכן בכתובת באמצעות ‎?agent=40</p></div>
+      <div><label for="agent">סוכן</label><input id="agent" inputmode="numeric" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי" aria-describedby="agentSource"><datalist id="agentOptions"></datalist><p class="field-note" id="agentSource">אפשר לקבוע סוכן בכתובת באמצעות ‎?agent=40</p></div>
+      <div><label for="warehouse">מחסן שולח</label><input id="warehouse" inputmode="numeric" maxlength="4" list="warehouseOptions" value="1" placeholder="ברירת המחדל בפריוריטי"><datalist id="warehouseOptions"></datalist></div>
+      <div><label for="location">איתור במחסן</label><input id="location" inputmode="numeric" maxlength="14" placeholder="ברירת המחדל בפריוריטי"></div>
       <div><label for="booknum">חשבונית פנקס</label><input id="booknum" maxlength="48" placeholder="לא חובה"></div>
     </div>
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
@@ -290,11 +300,15 @@
     <details class="optional-fields">
       <summary>הנחות<span class="pricing-exchange"> ושער דולר</span></summary>
       <div class="pricing-settings">
-        <div><label for="discount">הנחה לשורות (%)</label><input id="discount" type="number" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote"><p class="field-note" id="discountNote">חלה על שורות חדשות ושורות שלא שיניתם בהן הנחה. אין הנחה נוספת על הסכום הכולל.</p></div>
-        <div class="pricing-exchange"><label class="checkbox-label"><input type="checkbox" id="useBoiRates" autocomplete="off">שער דולר מבנק ישראל</label><p class="field-note" id="exchangeSourceNote"></p><p class="field-note" id="exchangeStatus" role="status"></p></div>
+        <div><label for="discount">הנחה לשורות (%)</label><input id="discount" type="number" inputmode="decimal" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote"><p class="field-note" id="discountNote">חלה על שורות חדשות ושורות שלא שיניתם בהן הנחה. אין הנחה נוספת על הסכום הכולל.</p></div>
+        <div class="pricing-exchange"><label class="checkbox-label"><input type="checkbox" id="useBoiRates" checked autocomplete="off">שער דולר מבנק ישראל</label><p class="field-note" id="exchangeSourceNote"></p><p class="field-note" id="exchangeStatus" role="status"></p></div>
       </div>
       <p class="field-note" id="selectedTypeNote"></p>
     </details>
+    <dl class="products-summary" aria-label="סיכום המוצרים" aria-live="polite" aria-atomic="true">
+      <div><dt>סה״כ כמות</dt><dd id="productsQuantity">0 גרם</dd></div>
+      <div><dt>סה״כ לפני מע״מ, אחרי הנחות</dt><dd id="productsAmount">0.00 ₪</dd></div>
+    </dl>
     </section>
     <section class="flow-panel" id="reviewStep" aria-labelledby="reviewStepTitle" hidden>
     <h2 id="reviewStepTitle" tabindex="-1">בודקים ומפיקים</h2>
@@ -358,6 +372,15 @@
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
+function selectNumericValue(event) {
+  const field = event.target;
+  if (field.matches('input[type="number"], input[inputmode="numeric"], #warehouse, #location, #agent')
+      && !field.readOnly && !field.disabled) {
+    field.select();
+  }
+}
+document.addEventListener('focusin', selectNumericValue);
+document.addEventListener('click', selectNumericValue);
 const VAT_RATE = 0.18;
 const fmt = n => (Number(n) || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₪';
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -520,6 +543,16 @@ let digitalCustomerRequest = 0;
 let digitalCustomerLoad;
 let digitalCustomerProfile;
 
+api('/api/mail/status').then(status => {
+  $('sendOriginalEmail').disabled = !status.configured;
+  $('sendOriginalEmail').checked = status.configured;
+  $('originalMailStatus').textContent = status.configured
+    ? 'בהפקה יישלח אותו קובץ מקור גם למייל שהוזן, מאת ' + status.from + '.'
+    : 'משלוח במייל אינו זמין עד להשלמת חיבור התיבה השולחת. המקור יורד למכשיר.';
+}).catch(() => {
+  $('originalMailStatus').textContent = 'זמינות המשלוח לא אומתה. המקור יורד למכשיר ללא מייל.';
+});
+
 function clearCustomerDelivery() {
   digitalCustomerRequest++;
   digitalCustomerLoad = digitalCustomerProfile = null;
@@ -681,7 +714,7 @@ let currentExchangeRates = null;
 const selectedRateSource = () => $('useBoiRates').checked ? 'boi' : 'priority';
 
 function invoiceExchangeRate(rate) {
-  return $('invoiceType').value === '2' && selectedRateSource() === 'boi'
+  return ['2', '4'].includes($('invoiceType').value) && selectedRateSource() === 'boi'
     ? Number((rate * 1.02).toFixed(6))
     : rate;
 }
@@ -715,7 +748,7 @@ async function loadExchangeRates() {
     currentExchangeRates = data;
     const info = data.rates.USD;
     $('exchangeStatus').textContent = source === 'boi'
-      ? `שער דולר מבנק ישראל${$('invoiceType').value === '2' ? ' בתוספת 2%' : ''}: ${invoiceExchangeRate(info.rate)} ₪ · פורסם ב־${info.rateDate}` + (info.rateDate < date ? ' · השער האחרון שפורסם עד תאריך החשבונית' : '')
+      ? `שער דולר מבנק ישראל${['2', '4'].includes($('invoiceType').value) ? ' בתוספת 2%' : ''}: ${invoiceExchangeRate(info.rate)} ₪ · פורסם ב־${info.rateDate}` + (info.rateDate < date ? ' · השער האחרון שפורסם עד תאריך החשבונית' : '')
       : 'פריוריטי: ' + Object.entries(data.rates).map(([code, rate]) => `${code}: ${rate.rate} ₪ · תאריך ${rate.rateDate}`).join(' | ');
   } catch (err) {
     if ($('invoiceType').value === '1' || $('date').value !== date || selectedRateSource() !== source) return;
@@ -732,11 +765,11 @@ function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = 
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td class="part-cell"><input class="l-part" aria-label="מק״ט" maxlength="22" value="${escapeHtml(partname)}" required autocomplete="off" placeholder="מק&quot;ט או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
-    <td><input class="l-grams" aria-label="כמות" type="number" step="0.001" min="0.001" value="${grams}" required><span class="l-unit">${gold ? 'גרם' : 'לפי המוצר'}</span></td>
-    <td><input class="l-price" aria-label="${gold ? 'מחיר בש״ח לגרם' : 'מחיר בדולרים ליחידה'}" type="number" step="0.01" min="0.01" value="${price}" ${gold ? '' : 'readonly'} required></td>
+    <td><input class="l-grams" aria-label="כמות" type="number" inputmode="decimal" step="0.001" min="0.001" value="${grams}" required><span class="l-unit">${gold ? 'גרם' : 'לפי המוצר'}</span></td>
+    <td><input class="l-price" aria-label="${gold ? 'מחיר בש״ח לגרם' : 'מחיר בדולרים ליחידה'}" type="number" inputmode="decimal" step="0.01" min="0.01" value="${price}" ${gold ? '' : 'readonly'} required></td>
     <td hidden><select class="l-currency" aria-label="מטבע מחיר" tabindex="-1">${gold ? '<option value="ש&quot;ח">ש״ח</option>' : '<option value="USD">USD</option><option value="$">$</option>'}</select></td>
-    <td class="pricing-exchange"><input class="l-exchange" aria-label="שער חליפין לש״ח" type="number" step="0.000001" min="0.000001" max="9999999.999999" value="1" readonly required></td>
-    <td><input class="l-discount" aria-label="הנחה לשורה באחוזים" type="number" step="0.01" min="0" max="100" value="${Number($('discount').value) || 0}"></td>
+    <td class="pricing-exchange"><input class="l-exchange" aria-label="שער חליפין לש״ח" type="number" inputmode="decimal" step="0.000001" min="0.000001" max="9999999.999999" value="1" readonly required></td>
+    <td><input class="l-discount" aria-label="הנחה לשורה באחוזים" type="number" inputmode="decimal" step="0.01" min="0" max="100" value="${Number($('discount').value) || 0}"></td>
     <td class="l-total" style="color:var(--muted)">—</td>
     <td><button type="button" class="del" title="מחיקת שורה">✕</button></td>`;
   tbody.appendChild(tr);
@@ -813,7 +846,7 @@ $('typePicker').addEventListener('click', e => {
   $('selectedTypeNote').textContent = gold
     ? 'מק״ט 14 מוגדר כברירת מחדל. הזינו מחיר לגרם לפני מע״מ והנחה.'
     : 'המחיר והמטבע ממחירון הבסיס בפריוריטי. המחיר לפני מע״מ והנחה.';
-  $('exchangeSourceNote').textContent = choice.dataset.type === '2'
+  $('exchangeSourceNote').textContent = ['2', '4'].includes(choice.dataset.type)
     ? 'ללא סימון: שער מפריוריטי לפי מטבע המוצר. עם סימון: שער בנק ישראל בתוספת 2%.'
     : 'ללא סימון: שער מפריוריטי לפי מטבע המוצר (USD או $).';
   $('selectedTypeTitle').focus();
@@ -846,7 +879,7 @@ function hidePartList(input) {
   if (list) list.hidden = true;
 }
 
-function pickPart(input, i) {
+function pickPart(input, i, focusQuantity = true) {
   const st = partState.get(input);
   const p = st?.items?.[i];
   if (!p) return;
@@ -859,7 +892,7 @@ function pickPart(input, i) {
   applyPartPrice(tr, p);
   hidePartList(input);
   recalc();
-  tr.querySelector('.l-grams').focus();
+  if (focusQuantity) tr.querySelector('.l-grams').focus();
 }
 
 function applyPartPrice(tr, p) {
@@ -948,7 +981,7 @@ async function advanceScannedLine(input) {
       const st = partState.get(partInput);
       clearTimeout(st?.timer);
       const highlighted = input === partInput && st?.active >= 0 && !tr.querySelector('.part-list').hidden;
-      if (highlighted) pickPart(partInput, st.active);
+      if (highlighted) pickPart(partInput, st.active, false);
       else {
         const data = await api('/api/parts?q=' + encodeURIComponent(term) + '&invoiceType=' + type + '&exact=1');
         if (!tr.isConnected || partInput.value.trim() !== term || $('invoiceType').value !== type) return;
@@ -959,17 +992,11 @@ async function advanceScannedLine(input) {
           showMsg('err', matches.length ? 'נמצאו מספר מוצרים לברקוד. יש לבחור מוצר מהרשימה.' : 'לא נמצא מוצר מתאים למק״ט או לברקוד שנסרק.');
           partInput.focus(); return;
         }
-        renderPartList(partInput, [exact], ''); pickPart(partInput, 0);
+        renderPartList(partInput, [exact], ''); pickPart(partInput, 0, false);
       }
     }
-    const price = tr.querySelector('.l-price');
-    if (!Number(price.value)) {
-      if (type === '1') price.focus();
-      else { showMsg('err', 'למוצר שנסרק חסר מחיר בסיס בדולרים בפריוריטי.'); partInput.focus(); }
-      return;
-    }
     hidePartList(partInput);
-    const next = tr.nextElementSibling || addLine();
+    const next = tr.nextElementSibling || addLine('');
     const nextInput = next.querySelector('.l-part');
     nextInput.focus(); nextInput.select();
   } catch (err) {
@@ -1002,6 +1029,12 @@ function recalc() {
   $('tBefore').textContent = totals ? fmt(totals.beforeVat) : '—';
   $('tVat').textContent = totals ? fmt(totals.vat) : '—';
   $('tTotal').textContent = totals ? fmt(totals.total) : '—';
+  const quantity = lines.filter(line => line.partname).reduce((sum, line) => sum + line.quantity, 0);
+  const quantityText = Number.isFinite(quantity)
+    ? quantity.toLocaleString('he-IL', { maximumFractionDigits: 3 })
+    : '—';
+  $('productsQuantity').textContent = quantityText + ($('invoiceType').value === '1' ? ' גרם' : '');
+  $('productsAmount').textContent = totals ? fmt(totals.beforeVat) : '—';
 }
 addLine();
 loadExchangeRates();
@@ -1041,10 +1074,13 @@ $('form').addEventListener('submit', async e => {
   }
 
   const details = $('details').value.trim();
+  const sendOriginalEmail = $('sendOriginalEmail')?.checked === true;
+  const email = sendOriginalEmail ? $('customerEmail').value.trim() : undefined;
+  if (sendOriginalEmail && !$('customerEmail').reportValidity()) return;
   btn.disabled = true; btn.textContent = 'שולח…';
   try {
     if (typeof InvoiceProgress !== 'undefined') InvoiceProgress.show('creating');
-    await api('/api/invoices/original-download-preflight',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({custname:$('custname').value})});
+    await api('/api/invoices/original-download-preflight',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({custname:$('custname').value,sendOriginalEmail,email,consent:sendOriginalEmail})});
     // מניעת כפילויות: אם יש מזהה הזמנה, בודקים שלא קיימת כבר חשבונית עם אותו מזהה
     if (details) {
       const dup = await api('/api/invoices/check?details=' + encodeURIComponent(details));
@@ -1061,6 +1097,9 @@ $('form').addEventListener('submit', async e => {
       body: JSON.stringify({
         requestId: typeof digitalCreationId==='function' ? digitalCreationId() : undefined,
         originalDownload: true,
+        sendOriginalEmail,
+        email,
+        consent: sendOriginalEmail,
         custname: $('custname').value,
         date: $('date').value,
         details,
@@ -1096,6 +1135,23 @@ $('form').addEventListener('submit', async e => {
 
 // ---------- חשבוניות אחרונות ----------
 let recentRequest = 0;
+let agentRecentRequest = 0;
+function renderRecentInvoices(rows, scope) {
+  return '<ol class="recent-list" aria-label="חשבוניות אחרונות">' + rows.map((r, index) => {
+      const ivnum = escapeHtml(r.IVNUM);
+      const draft = r.STATDES === 'טיוטא';
+      const date = escapeHtml((r.IVDATE || '').slice(0,10).split('-').reverse().join('.'));
+      return `<li class="recent-invoice"><article aria-labelledby="recentTitle${scope}${index}">
+        <div class="recent-invoice-header"><div><h3 id="recentTitle${scope}${index}">חשבונית <bdi>${ivnum}</bdi></h3><div class="recent-meta"><span>${date}</span><span class="invoice-status ${draft ? 'draft' : 'final'}">${escapeHtml(r.STATDES || '')}</span></div></div><div class="recent-amount"><span>סה״כ</span><strong>${fmt(r.TOTPRICE)}</strong></div></div>
+        ${scope === 'agent' ? `<p class="recent-reference">לקוח ${escapeHtml(r.CDES || '')} <bdi>${escapeHtml(r.CUSTNAME || '')}</bdi></p>` : ''}
+        ${r.DETAILS ? `<p class="recent-reference">פרטים: ${escapeHtml(r.DETAILS)}</p>` : ''}
+        ${scope === 'customer' ? `<div class="recent-actions" role="group" aria-label="פעולות לחשבונית ${ivnum}">
+          ${draft ? `<button type="button" class="close-btn recent-primary" data-iv="${ivnum}">סגירה לחשבונית סופית</button>` : `<button type="button" class="close-btn signed-copy-btn recent-primary" data-iv="${ivnum}">העתק חתום</button><button type="button" class="close-btn sign-btn" data-iv="${ivnum}">פתיחה וחתימה</button>`}
+          <details class="invoice-more"><summary>אפשרויות נוספות</summary><div class="invoice-more-actions"><button type="button" class="close-btn dl-btn" data-iv="${ivnum}">הורדת העתק PDF</button>${draft ? '' : `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${ivnum}">הורדת מקור</button>`}</div></details>
+        </div>` : ''}</article></li>`;
+    }).join('') + '</ol>';
+}
+
 async function loadRecent() {
   const request = ++recentRequest;
   const el = $('recentBody');
@@ -1110,25 +1166,41 @@ async function loadRecent() {
     if (request !== recentRequest || $('custname').value.trim() !== customer) return;
     const rows = (data.value || []).filter(row => String(row.CUSTNAME) === customer);
     if (!rows.length) { el.textContent = 'אין עדיין חשבוניות להצגה ללקוח הזה.'; return; }
-    el.innerHTML = '<ol class="recent-list" aria-label="חשבוניות הלקוח">' + rows.map((r, index) => {
-      const ivnum = escapeHtml(r.IVNUM);
-      const draft = r.STATDES === 'טיוטא';
-      const date = escapeHtml((r.IVDATE || '').slice(0,10).split('-').reverse().join('.'));
-      return `<li class="recent-invoice"><article aria-labelledby="recentTitle${index}">
-        <div class="recent-invoice-header"><div><h3 id="recentTitle${index}">חשבונית <bdi>${ivnum}</bdi></h3><div class="recent-meta"><span>${date}</span><span class="invoice-status ${draft ? 'draft' : 'final'}">${escapeHtml(r.STATDES || '')}</span></div></div><div class="recent-amount"><span>סה״כ</span><strong>${fmt(r.TOTPRICE)}</strong></div></div>
-        ${r.DETAILS ? `<p class="recent-reference">פרטים: ${escapeHtml(r.DETAILS)}</p>` : ''}
-        <div class="recent-actions" role="group" aria-label="פעולות לחשבונית ${ivnum}">
-          ${draft ? `<button type="button" class="close-btn recent-primary" data-iv="${ivnum}">סגירה לחשבונית סופית</button>` : `<button type="button" class="close-btn signed-copy-btn recent-primary" data-iv="${ivnum}">העתק חתום</button><button type="button" class="close-btn sign-btn" data-iv="${ivnum}">פתיחה וחתימה</button>`}
-          <details class="invoice-more"><summary>אפשרויות נוספות</summary><div class="invoice-more-actions"><button type="button" class="close-btn dl-btn" data-iv="${ivnum}">הורדת העתק PDF</button>${draft ? '' : `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${ivnum}">הורדת מקור</button>`}</div></details>
-        </div></article></li>`;
-    }).join('') + '</ol>';
+    el.innerHTML = renderRecentInvoices(rows, 'customer');
   } catch (e) {
     if (request !== recentRequest || $('custname').value.trim() !== customer) return;
     el.textContent = 'לא ניתן לטעון את חשבוניות הלקוח: ' + e.message + '. אפשר לנסות שוב בלחיצה על רענון.';
   }
 }
+async function loadAgentRecent() {
+  const request = ++agentRecentRequest;
+  const agent = $('agent').value.trim();
+  const body = $('agentRecentBody');
+  $('agentRefreshBtn').disabled = !agent;
+  $('agentRecentTitle').textContent = agent ? 'חשבוניות אחרונות · סוכן ' + agent : 'חשבוניות אחרונות של הסוכן';
+  $('agentRecentHint').textContent = agent ? 'עד 10 חשבוניות אחרונות בפריוריטי' : '';
+  if (!agent) {
+    body.textContent = 'להצגת החשבוניות יש להגדיר סוכן בקישור או בפרטי החשבונית.';
+    return;
+  }
+  body.textContent = 'טוען את חשבוניות הסוכן…';
+  try {
+    const data = await api('/api/invoices/recent?agent=' + encodeURIComponent(agent));
+    if (request !== agentRecentRequest || $('agent').value.trim() !== agent) return;
+    const rows = (data.value || []).filter(row => String(row.AGENTCODE) === agent);
+    if (!rows.length) { body.textContent = 'אין חשבוניות להצגה לסוכן הזה.'; return; }
+    body.innerHTML = renderRecentInvoices(rows, 'agent');
+  } catch (error) {
+    if (request !== agentRecentRequest || $('agent').value.trim() !== agent) return;
+    body.textContent = 'לא ניתן לטעון את חשבוניות הסוכן: ' + error.message + '. אפשר לנסות שוב בלחיצה על רענון.';
+  }
+}
 $('refreshBtn').addEventListener('click', loadRecent);
+$('agentRefreshBtn').addEventListener('click', loadAgentRecent);
+$('agent').addEventListener('change', loadAgentRecent);
+$('changeType').addEventListener('click', loadAgentRecent);
 loadRecent();
+loadAgentRecent();
 
 // ---------- סגירת חשבונית (טיוטה -> סופית IN) ----------
 async function closeInvoice(ivnum, btn, confirmFirst = true) {
@@ -1214,7 +1286,7 @@ document.addEventListener('click', e => {
   if (!b) return;
   if (b.classList.contains('signed-copy-btn')) openSignedInvoice(b.dataset.iv, b);
   else if (b.classList.contains('sign-btn')) openInvoiceForSigning(b.dataset.iv);
-  else if (b.classList.contains('prepare-original-btn')) finishOriginalDownload({ivnum:b.dataset.iv});
+  else if (b.classList.contains('prepare-original-btn')) finishOriginalDownload({ivnum:b.dataset.iv,email:b.dataset.email,sendOriginalEmail:b.dataset.sendOriginalEmail==='true'});
   else if (b.classList.contains('dl-btn')) downloadInvoice(b.dataset.iv, b);
   else closeInvoice(b.dataset.iv, b);
 });

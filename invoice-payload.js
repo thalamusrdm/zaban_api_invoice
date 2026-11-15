@@ -42,9 +42,10 @@ function buildInvoicePayload(body, user) {
     IVCODENAME: '02',
     EDEA_INVTYPE: type,
     DETAILS: text(details, 'פרטים', 24),
+    // The agent trigger selects its warehouse. Apply the user's warehouse afterward.
+    AGENTCODE: text(body.agent, 'סוכן', 16),
     WARHSNAME: text(body.warehouse, 'מחסן', 4),
     LOCNAME: text(body.location, 'איתור', 14),
-    AGENTCODE: text(body.agent, 'סוכן', 16),
     BOOKNUM: text(body.booknum, 'חשבונית פנקס', 48),
     PERCENT: number(body.discount, 'הנחה כללית', 0, 100, 0, 2),
     AINVOICEITEMS_SUBFORM: lines.map((line, i) => {

@@ -7,7 +7,7 @@ const { Readable } = require('node:stream');
 const path = require('node:path');
 
 // The real HTTP handler runs with a fake Priority transport and no filesystem writes.
-function isolatedServer(getResponse, responseStatus = 200, sdk = {}, store, originals) {
+function isolatedServer(getResponse, responseStatus = 200, sdk = {}, store, originals, mailer) {
   let handler;
   const calls = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8'), {
@@ -16,6 +16,7 @@ function isolatedServer(getResponse, responseStatus = 200, sdk = {}, store, orig
       if (name === 'http') return { createServer(fn) { handler = fn; return { listen() {} }; } };
       if (name === 'fs') return { existsSync: () => false, appendFile() {} };
       if (name === './priority-sdk') return sdk;
+      if (name === './invoice-mail') return { createMailer: () => mailer || require('../invoice-mail').createMailer({}) };
       if (name === './invoice-payload') return require('../invoice-payload');
       if (name === './exchange-rates') return require('../exchange-rates');
       if (name === './original-documents') return originals ? {originalStore:()=>originals} : require('../original-documents');
@@ -94,6 +95,48 @@ test('invalid FX input returns 400 before any Priority request', async () => {
   const result = await server.request('POST', '/api/invoices', { custname: 'TEST', date: '2026-10-19', lines: [{ partname: 'TEST-PART', quantity: 1, price: 100, currency: '$' }] });
   assert.equal(result.status, 400);
   assert.equal(server.calls.length, 0);
+});
+
+test('agent invoice list queries only the selected agent and rejects ambiguous scopes', async () => {
+  const server = isolatedServer(() => ({ value: [
+    { AGENTCODE: '80', IVNUM: 'IN80', CUSTNAME: 'TEST' },
+    { AGENTCODE: '40', IVNUM: 'IN40', CUSTNAME: 'OTHER' },
+  ] }));
+  const result = await server.request('GET', '/api/invoices/recent?agent=80');
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.value.map(row => row.IVNUM), ['IN80']);
+  const query = new URL(server.calls[0].url).searchParams;
+  assert.equal(query.get('$filter'), "AGENTCODE eq '80'");
+  assert.equal(query.get('$top'), '10');
+  assert.equal(query.get('$orderby'), 'IV desc');
+  for (const url of ['/api/invoices/recent?agent=80&custname=TEST', '/api/invoices/recent?agent=12345678901234567']) {
+    assert.equal((await server.request('GET', url)).status, 400);
+  }
+  assert.equal(server.calls.length, 1);
+});
+
+test('invoice creation applies the chosen warehouse after the agent warehouse default and before items', async () => {
+  const server = isolatedServer((_url, options) => {
+    const payload = JSON.parse(options.body);
+    let warehouse, location;
+    for (const [field, value] of Object.entries(payload)) {
+      if (field === 'AGENTCODE') { warehouse = value; location = ''; }
+      if (field === 'WARHSNAME') { warehouse = value; location = ''; }
+      if (field === 'LOCNAME') location = value;
+      if (field === 'AINVOICEITEMS_SUBFORM') {
+        assert.equal(warehouse, '1');
+        assert.equal(location, '0');
+        assert.equal(value[0].PARTNAME, 'TEST-PART');
+      }
+    }
+    return { IVNUM: 'T-TEST', STATDES: 'טיוטא' };
+  });
+  const result = await server.request('POST', '/api/invoices', {
+    custname: 'TEST', date: '2026-11-11', agent: '80', warehouse: '1', location: '0',
+    lines: [{ partname: 'TEST-PART', quantity: 1, price: 100, currency: 'ש"ח' }],
+  });
+  assert.equal(result.status, 200);
+  assert.equal(server.calls.length, 1);
 });
 
 test('customer delivery validates one email and saves settings without creating an invoice', async () => {
@@ -325,4 +368,53 @@ test('ambiguous no-email generation is never retried automatically',async t=>{
   const store=await deliveryFixture(t);const d=require('../digital-invoice');await store.write(d.keyFor('http://priority.invalid/odata/config/test-only',123),'context',{originalDownload:true,custname:'TEST'});let prints=0;
   const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:[]}:{IV:123,OWNERLOGIN:'fake-user',CUSTNAME:'TEST'},200,{async getOriginalInvoiceDocument(){prints++;throw Error('timeout after generation');}},store,(_key,produce,download)=>produce().then(download));
   for(let i=0;i<2;i++)assert.ok((await server.request('POST','/api/invoices/prepare-original-download',{ivnum:'IN123'})).status>=400);assert.equal(prints,1);assert.ok(server.calls.every(x=>x.method==='GET'));
+});
+
+test('combined issuance persists approved recipient, reuses its draft and binds recipient to request ID', async t => {
+  const store=await deliveryFixture(t); let creates=0;
+  const mailer={async verify(){}};
+  const sdk={async digitalCustomerForm(){return {name:'Test',digital:true,email:'agent@example.com',requiredMissing:[]};}};
+  const server=isolatedServer(()=>{creates++;return {IV:123,IVNUM:'T123'};},200,sdk,store,undefined,mailer);
+  const body={...validDigitalBody(),digitalEmail:false,originalDownload:true,sendOriginalEmail:true};
+  const first=await server.request('POST','/api/invoices',body);
+  assert.equal(first.status,200);assert.equal(first.body.sendOriginalEmail,true);
+  assert.equal((await server.request('POST','/api/invoices',body)).status,200);assert.equal(creates,1);
+  const context=await store.read(require('../digital-invoice').keyFor('http://priority.invalid/odata/config/test-only',123));
+  assert.equal(context.email,body.email);assert.ok(context.consentAt);assert.equal(context.originalDownload,true);
+  assert.equal((await server.request('POST','/api/invoices',{...body,consent:false})).status,400);
+  assert.equal(creates,1);
+});
+
+test('saved original is mailed once across concurrent requests and restart, with exact download bytes',async t=>{
+  const store=await deliveryFixture(t),d=require('../digital-invoice');
+  const key=d.keyFor('http://priority.invalid/odata/config/test-only',123);
+  await store.write(key,'context',{originalDownload:true,sendOriginalEmail:true,custname:'TEST',email:'agent@example.com'});
+  const bytes=Buffer.from('%PDF-1.7 /ByteRange exact saved original');let sends=0;
+  const transport=url=>url.includes('EXTFILES_SUBFORM')?{value:[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:'data:application/pdf;base64,'+bytes.toString('base64')}]}:{IV:123,IVNUM:'IN123',CUSTNAME:'TEST',OWNERLOGIN:'fake-user'};
+  const sdk={async digitalCustomerForm(){return {digital:true,email:'agent@example.com'};}};
+  const mailer={async verify(){},async sendOriginal(value){sends++;assert.deepEqual(value.buffer,bytes);return {acceptedByMailServer:true,ivnum:value.ivnum,email:value.email};}};
+  const server=isolatedServer(transport,200,sdk,store,undefined,mailer);
+  const body={ivnum:'IN123',email:'agent@example.com'};
+  const result=await Promise.all([server.request('POST','/api/invoices/email-original',body),server.request('POST','/api/invoices/email-original',body)]);
+  assert.equal(result[0].status,200);assert.equal(result[1].status,200);assert.equal(sends,1);
+  const restarted=isolatedServer(transport,200,sdk,store,undefined,mailer);
+  assert.equal((await restarted.request('POST','/api/invoices/email-original',body)).status,200);assert.equal(sends,1);
+  const download=await server.request('GET','/api/invoices/existing-original?ivnum=IN123');assert.deepEqual(download.buffer,bytes);
+  assert.equal((await server.request('POST','/api/invoices/email-original',{...body,email:'other@example.com'})).status,400);
+  assert.ok(server.calls.every(call=>call.method==='GET'));
+});
+
+test('uncertain original mail is blocked on retry and missing transport blocks before creation',async t=>{
+  const store=await deliveryFixture(t),d=require('../digital-invoice');
+  const key=d.keyFor('http://priority.invalid/odata/config/test-only',123);
+  await store.write(key,'context',{originalDownload:true,sendOriginalEmail:true,custname:'TEST',email:'agent@example.com'});
+  const bytes=Buffer.from('%PDF-1.7 /ByteRange original');let sends=0;
+  const sdk={async digitalCustomerForm(){return {name:'Test',digital:true,email:'agent@example.com'};}};
+  const server=isolatedServer(url=>url.includes('EXTFILES_SUBFORM')?{value:[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:'data:application/pdf;base64,'+bytes.toString('base64')}]}:{IV:123,CUSTNAME:'TEST',OWNERLOGIN:'fake-user'},200,sdk,store,undefined,{async verify(){},async sendOriginal(){sends++;throw Error('uncertain');}});
+  const body={ivnum:'IN123',email:'agent@example.com'};
+  assert.equal((await server.request('POST','/api/invoices/email-original',body)).status,500);
+  assert.equal((await server.request('POST','/api/invoices/email-original',body)).status,400);assert.equal(sends,1);
+  const unconfigured=isolatedServer(()=>{throw Error('must not create');},200,sdk,store);
+  assert.equal((await unconfigured.request('POST','/api/invoices',{...validDigitalBody(),digitalEmail:false,originalDownload:true,sendOriginalEmail:true})).status,503);
+  assert.equal(unconfigured.calls.length,0);
 });

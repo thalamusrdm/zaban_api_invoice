@@ -76,5 +76,9 @@ test('switching sources separates caches and ignores the previous in-flight sour
   assert.equal(Number(field.value), 3.1722); assert.equal(calls, 2);
   ui.elements.invoiceType.value = '4';
   await ui.ctx.load();
-  assert.equal(Number(field.value), 3.11); assert.equal(calls, 2);
+  assert.equal(Number(field.value), 3.1722); assert.equal(calls, 2);
+  assert.match(ui.elements.exchangeStatus.textContent, /בתוספת 2%/);
+  ui.elements.useBoiRates.checked = false;
+  await ui.ctx.load();
+  assert.equal(Number(field.value), 3.22422); assert.equal(calls, 2);
 });

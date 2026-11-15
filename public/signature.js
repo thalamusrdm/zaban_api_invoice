@@ -55,13 +55,27 @@ async function openInvoiceForSigning(ivnum){
 async function finishOriginalDownload(data){
   if(typeof InvoiceProgress!=='undefined')InvoiceProgress.update('original');
   const notice=document.getElementById('documentMsg');
-  notice.className='msg show';notice.textContent='מכין את מקור החשבונית '+data.ivnum+' לשמירה בנספחים ולהורדה ללא מייל…';
+  notice.className='msg show';notice.textContent='מכין את מקור החשבונית '+data.ivnum+' לשמירה בנספחים ולהורדה…';
   try{
     await api('/api/invoices/prepare-original-download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ivnum:data.ivnum})});
-    await downloadInvoice(data.ivnum,null,'original');
+    // A browser download failure must not prevent mailing the saved attachment.
+    const downloaded = await downloadInvoice(data.ivnum,null,'original');
+    if(data.sendOriginalEmail){
+      const downloadNotice = notice.textContent;
+      notice.textContent = 'מעביר את מקור החשבונית '+data.ivnum+' למייל '+data.email+'…';
+      try{
+        const result=await api('/api/invoices/email-original',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ivnum:data.ivnum,email:data.email})});
+        if(!result.acceptedByMailServer)throw Error('שרת הדואר לא אישר את בקשת השליחה');
+        notice.className='msg show '+(downloaded?'ok':'warn');
+        notice.textContent=downloadNotice+' שרת הדואר קיבל את המקור לשליחה אל '+result.email+'. זה אינו אישור מסירה לתיבת הלקוח.';
+      }catch(e){
+        notice.className='msg show warn';
+        notice.textContent=downloadNotice+' משלוח המקור במייל לא אומת: '+e.message+' אין להפיק חשבונית נוספת.';
+      }
+    }
   }catch(e){
     notice.className='msg show warn';notice.textContent='החשבונית '+data.ivnum+' סופית, אך הכנת המקור לא אומתה: '+e.message+'. אין להפיק חשבונית נוספת. לא נשלח מייל. ';
-    const retry=document.createElement('button');retry.type='button';retry.className='close-btn prepare-original-btn';retry.dataset.iv=data.ivnum;retry.textContent='בדיקת המקור הקיים והמשך הורדה';notice.appendChild(retry);
+    const retry=document.createElement('button');retry.type='button';retry.className='close-btn prepare-original-btn';retry.dataset.iv=data.ivnum;retry.dataset.email=data.email||'';retry.dataset.sendOriginalEmail=String(!!data.sendOriginalEmail);retry.textContent='בדיקת המקור הקיים והמשך הורדה';notice.appendChild(retry);
   }finally{await openInvoiceForSigning(data.ivnum);}
 }
 async function finishDigitalInvoice(data){

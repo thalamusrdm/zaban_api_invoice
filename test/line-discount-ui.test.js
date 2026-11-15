@@ -9,7 +9,8 @@ const InvoiceCalculations = require('../public/invoice-calculations');
 test('default discounts seed unedited rows; overrides calculate from full price once', () => {
   const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
   const listeners = {};
-  const elements = { discount: { value: '85', addEventListener(type, fn) { listeners.defaultInput = fn; } }, tBefore: {}, tVat: {}, tTotal: {} };
+  const elements = { discount: { value: '85', addEventListener(type, fn) { listeners.defaultInput = fn; } }, tBefore: {}, tVat: {}, tTotal: {},
+    productsQuantity: {}, productsAmount: {}, invoiceType: { value: '4' } };
   function row(discount) {
     const tr = { dataset: {}, querySelector: selector => fields[selector] };
     const fields = Object.fromEntries(Object.entries({ '.l-part': 'TEST', '.l-grams': '1', '.l-price': '1440', '.l-currency': 'USD', '.l-exchange': '3.11', '.l-discount': discount, '.l-total': '' })
@@ -33,4 +34,9 @@ test('default discounts seed unedited rows; overrides calculate from full price 
   assert.equal(second.querySelector('.l-discount').value, '90');
   assert.ok(Math.abs(elements.tBefore.textContent - 1343.52) < 1e-8);
   assert.ok(Math.abs(elements.tTotal.textContent - 1585.3536) < 1e-8);
+  assert.equal(elements.productsQuantity.textContent, '2');
+  assert.equal(elements.productsAmount.textContent, elements.tBefore.textContent);
+  elements.invoiceType.value = '1';
+  listeners.defaultInput();
+  assert.equal(elements.productsQuantity.textContent, '2 גרם');
 });

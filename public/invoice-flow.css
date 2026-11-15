@@ -72,6 +72,10 @@ label { color: var(--text); margin-bottom: 6px; }
 #lines th { padding-block: 10px; }
 #lines td { padding-block: 12px; border-top: 1px solid var(--border); }
 .addline { border-style: solid; color: var(--accent-dark); padding: 8px 16px; }
+.products-summary { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px 24px; border-top: 1px solid var(--border); margin: 24px 0 0; padding-top: 16px; }
+.products-summary dt { color: var(--muted); font-size: 13px; }
+.products-summary dd { margin: 4px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.products-summary > div:last-child { text-align: end; margin-inline-start: auto; }
 .review-facts { display: flex; flex-wrap: wrap; gap: 24px 48px; margin: 0 0 24px; }
 .review-facts dt { color: var(--muted); font-size: 13px; }
 .review-facts dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; }
@@ -86,6 +90,9 @@ label { color: var(--text); margin-bottom: 6px; }
 .download-note p { margin: 0 0 8px; font-size: 14px; max-width: 70ch; }
 .final-warning { font-size: 13px; color: var(--muted); }
 .recent-section { margin-top: 24px; }
+.agent-recent { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); }
+.agent-recent .recent-toolbar h3 { margin: 0; font-size: 19px; }
+.agent-recent .refresh { width: auto; cursor: pointer; }
 .recent-toolbar { display: flex; justify-content: space-between; align-items: center; margin: 12px 0; gap: 12px; }
 #recentBody { overflow-wrap: anywhere; }
 .recent-list { list-style: none; margin: 0; padding: 0; }
