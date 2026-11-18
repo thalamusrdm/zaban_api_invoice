@@ -1,0 +1,51 @@
+{
+  "description": "Optional branding: continue after logo fetch failure; render no image when missing. No changes to invoice branch or send retries.",
+  "nodes": [
+    {
+      "id": "0ed0d7b5-605a-4199-a05f-96a37a59d3b8",
+      "name": "Fetch Logo",
+      "parameters": {
+        "url": "https://zaban.mediamonster.com/wp-content/uploads/2026/02/logo.png",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 3000
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "08512055-9c49-4ba3-a6cc-29397213572d",
+      "name": "Encode Logo",
+      "parameters": {
+        "jsCode": "// Branding is optional; always preserve validated quote data for PDF/email.\nconst validated = $('Validate Input').first().json;\nconst binary = $input.first().binary?.data;\nlet logoDataUri = '';\nlet logoStatus = 'unavailable';\nif (binary && ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(binary.mimeType)) {\n  try {\n    const bytes = await this.helpers.getBinaryDataBuffer(0, 'data');\n    if (bytes.length > 0 && bytes.length <= 500000) {\n      logoDataUri = `data:${binary.mimeType};base64,${bytes.toString('base64')}`;\n      logoStatus = 'included';\n    }\n  } catch {\n    // Failure to read an optional logo must not block document delivery.\n  }\n}\nconst logoHtml = logoDataUri\n  ? '<img src=\"' + logoDataUri + '\" alt=\"צבאן סיטונאות תכשיטים\" border=\"0\" width=\"120\" style=\"display:inline-block; border:none; width:120px; max-width:100%;\">'\n  : '';\nreturn [{ json: { ...validated, logo_data_uri: logoDataUri, logo_html: logoHtml, logo_status: logoStatus } }];"
+      }
+    },
+    {
+      "id": "54488e27-bbf1-4833-8b6b-beece8318073",
+      "name": "Send a message",
+      "parameters": {
+        "toRecipients": "={{ $('Validate Input').first().json.email }}",
+        "subject": "=הצעת מחיר חדשה עבורך{{ $('Validate Input').first().json.quote_number ? ' - מס׳ ' + $('Validate Input').first().json.quote_number : '' }}",
+        "bodyContent": "=<!DOCTYPE html>\n<html lang=\"he\" dir=\"rtl\">\n<head>\n    <meta charset=\"UTF-8\">\n    <title>הצעת מחיר</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#ffffff;\">\n    <div style=\"background-color:#ffffff; padding:0; text-align:center;\">\n        <table width=\"100%\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" role=\"presentation\" style=\"background-color:#ffffff;\">\n            <tbody>\n                <tr>\n                    <td></td>\n                    <td width=\"600\">\n                        <div dir=\"rtl\" style=\"margin:0 auto; padding:24px 0; width:100%; max-width:600px;\">\n                            \n                            <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" role=\"presentation\" style=\"background-color:#ffffff; border-radius:8px;\">\n                                <tbody>\n                                    <tr>\n                                        <td align=\"center\" valign=\"top\">\n                                            <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" role=\"presentation\">\n                                                <tbody>\n                                                    <tr>\n                                                        <td style=\"padding:32px 32px 0;\">\n                                                            <p align=\"right\" style=\"margin:0; text-align:right;\">\n                                                                {{ $('Encode Logo').first().json.logo_html }}\n                                                            </p>\n                                                        </td>\n                                                    </tr>\n                                                </tbody>\n                                            </table>\n\n                                            <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" role=\"presentation\" style=\"background-color:#ffffff; border-radius:3px;\">\n                                                <tbody>\n                                                    <tr>\n                                                        <td style=\"padding:20px 32px 0;\">\n                                                            <h1 style=\"font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:32px; font-weight:700; margin:0; color:#111; text-align:right;\">\n                                                                הצעת מחיר עבורך\n                                                            </h1>\n                                                        </td>\n                                                    </tr>\n                                                    <tr>\n                                                        <td valign=\"top\" style=\"padding:20px 32px 32px;\">\n                                                            <div align=\"right\" style=\"color:#414141; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:16px; line-height:150%; text-align:right;\">\n                                                                \n                                                                <p style=\"margin:0 0 16px;\">\n                                                                    היי {{ $('Validate Input').first().json.customer_name || '' }},\n                                                                </p>\n                                                                \n                                                                <p style=\"margin:0 0 16px;\">\n                                                                    מצורפת בזאת הצעת מחיר לבקשתך,\n                                                                </p>\n                                                                \n                                                                <p style=\"margin:0;\">\n                                                                    בברכה,<br>\n                                                                    <strong>צבאן סיטונאות תכשיטים</strong>\n                                                                </p>\n\n                                                            </div>\n                                                        </td>\n                                                    </tr>\n                                                </tbody>\n                                            </table>\n\n                                        </td>\n                                    </tr>\n                                    \n                                    <tr>\n                                        <td align=\"center\" valign=\"top\">\n                                            <table border=\"0\" cellpadding=\"10\" cellspacing=\"0\" width=\"100%\" role=\"presentation\">\n                                                <tbody>\n                                                    <tr>\n                                                        <td valign=\"middle\" align=\"center\" style=\"border-top:1px solid rgba(0,0,0,.2); font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:12px; line-height:140%; color:#111; padding:32px;\">\n                                                            <p style=\"margin:0;\">צבאן סיטונאות תכשיטים\n<br>\nהרקון 1, רמת גן\n<br>\n<a href=\"mailto:sales@zaban-bechor.co.il\">sales@zaban-bechor.co.il</a>\n</p>\n\n                                                        </td>\n                                                    </tr>\n                                                </tbody>\n                                            </table>\n                                        </td>\n                                    </tr>\n\n                                </tbody>\n                            </table>\n                        </div>\n                    </td>\n                    <td></td>\n                </tr>\n            </tbody>\n        </table>\n    </div>\n</body>\n</html>",
+        "additionalFields": {
+          "attachments": {
+            "attachments": [
+              {
+                "binaryPropertyName": "data"
+              }
+            ]
+          },
+          "from": "צבאן סיטונאות תכשיטים",
+          "bodyContentType": "html",
+          "replyTo": "sales@zaban-bechor.co.il",
+          "saveToSentItems": true
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ]
+}

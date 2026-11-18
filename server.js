@@ -6,6 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { buildInvoicePayload, INVOICE_TYPES, CURRENCIES } = require('./invoice-payload');
+const partLookup = require('./public/part-lookup');
 const { exchangeQuery, exchangeResult, priorityExchangeResult } = require('./exchange-rates');
 const { goldCutoff, goldResult } = require('./gold-rates');
 let sdk; // נטען אחרי קריאת .env (ראו למטה)
@@ -194,29 +195,36 @@ const handlers = {
 
   // חיפוש פריטים (מק"ט) להשלמה אוטומטית בשורות החשבונית — לפי תחילת מק"ט או חלק מהתיאור
   'GET /api/parts': async (q) => {
-    const term = (q.get('q') || '').trim();
+    const term = partLookup.normalize(q.get('q'));
     if (term.length < 1) return { value: [] };
+    if (!partLookup.isValid(term)) throw badRequest('המק״ט או הברקוד מכיל תווים לא תקינים או ארוך מדי');
     const invoiceType = q.get('invoiceType');
     if (!INVOICE_TYPES.some(x => x.code === invoiceType)) throw badRequest('יש לבחור סוג חשבונית לחיפוש מק״ט');
     const t = odataStr(term);
-    const sel = 'PARTNAME,BARCODE,PARTDES,PUNITNAME,UNITNAME,BASEPLPRICE,BASEPLCODE,EDEA_PARTTYPE,EDEA_FEIN,FAMILYDES';
-    const get = f => priority('GET', `LOGPART?$select=${sel}&$top=15&$filter=${encodeURIComponent(`(${f}) and STATDES eq 'פעיל' and EDEA_PARTTYPE eq '${invoiceType}'`)}`);
+    const sel = 'PARTNAME,BARCODE,PARTDES,PUNITNAME,UNITNAME,BASEPLPRICE,BASEPLCODE,EDEA_PARTTYPE,EDEA_FEIN,FAMILYDES,STATDES';
+    const identity = `PARTNAME eq '${t}' or BARCODE eq '${t}'`;
+    const get = (f, scoped = true) => priority('GET', `LOGPART?$select=${sel}&$top=16&$orderby=PARTNAME asc&$filter=${encodeURIComponent(scoped ? `(${f}) and STATDES eq 'פעיל' and EDEA_PARTTYPE eq '${invoiceType}'` : `(${f})`)}`);
+    const eligible = p => String(p.EDEA_PARTTYPE) === invoiceType && p.STATDES === 'פעיל';
+    // Exact identities get their own query so suggestions cannot displace them.
+    const exactResult = await get(identity);
+    const exact = partLookup.exactMatches(exactResult.value || [], term).filter(eligible);
+    if (exact.length) return { value: exact, truncated: (exactResult.value || []).length >= 16 };
     if (q.get('exact') === '1') {
-      return get(`PARTNAME eq '${t}' or BARCODE eq '${t}'`);
+      const other = partLookup.exactMatches((await get(identity, false)).value || [], term);
+      const sameType = other.filter(p => String(p.EDEA_PARTTYPE) === invoiceType);
+      if (sameType.length) return { value: [], reason: 'inactive', message: 'המוצר קיים בפריוריטי אך אינו פעיל.' };
+      if (other.length) return { value: [], reason: 'wrong_invoice_type', message: 'המוצר קיים בפריוריטי אך הסיווג שלו אינו מתאים לסוג החשבונית שנבחר.' };
+      return { value: [], reason: 'not_found', message: 'לא נמצאה התאמה מדויקת למק״ט או לברקוד בפריוריטי.' };
     }
-    // שתי שאילתות במקביל: התאמה לפי מק"ט (קודם) ואז לפי תיאור — כך "14" מחזיר קודם את המק"ט 14 עצמו
-    const [byCode, byDesc] = await Promise.all([get(`PARTNAME eq '${t}*' or BARCODE eq '${t}'`), get(`PARTDES eq '*${t}*'`)]);
-    const seen = new Set();
-    const value = [];
-    for (const p of [...(byCode.value || []), ...(byDesc.value || [])]) {
-      if (seen.has(p.PARTNAME)) continue;
-      seen.add(p.PARTNAME);
-      value.push(p);
-      if (value.length >= 20) break;
-    }
-    // מק"ט מדויק תמיד ראשון
-    value.sort((a, b) => (b.PARTNAME === term) - (a.PARTNAME === term));
-    return { value };
+    const results = await Promise.allSettled([get(`PARTNAME eq '${t}*' or BARCODE eq '${t}*'`), get(`PARTDES eq '*${t}*'`)]);
+    const successful = results.filter(result => result.status === 'fulfilled');
+    if (!successful.length) throw results[0].reason;
+    const searchText = term.toLowerCase();
+    const value = partLookup.uniqueParts(successful.flatMap(result => result.value.value || []))
+      .filter(p => eligible(p) && (String(p.PARTNAME).toLowerCase().startsWith(searchText)
+        || String(p.BARCODE || '').toLowerCase().startsWith(searchText) || String(p.PARTDES || '').toLowerCase().includes(searchText)));
+    return { value: value.slice(0, 20), truncated: value.length > 20 || successful.some(result => (result.value.value || []).length >= 16),
+      partial: successful.length !== results.length };
   },
 
   // פרטי לקוח הנדרשים ל"חשבוניות ישראל" (מספר הקצאה): מס' חברה, הסבר המס', תיק מע"מ, סוג לקוח וכו'
@@ -275,11 +283,21 @@ const handlers = {
   'GET /api/invoices/recent': async q => {
     const custname = String(q.get('custname') || '').trim();
     const agent = String(q.get('agent') || '').trim();
+    const before = String(q.get('before') || '').trim();
+    if (before && (!agent || !/^[1-9][0-9]*$/.test(before) || !Number.isSafeInteger(Number(before)))) {
+      throw badRequest('מיקום ההמשך ברשימת חשבוניות הסוכן אינו תקין');
+    }
     if (agent) {
       if (custname || agent.length > 16) throw badRequest('יש לבחור סוכן אחד להצגת החשבוניות שלו.');
-      const filter = `AGENTCODE eq '${odataStr(agent)}'`;
-      const result = await priority('GET', `AINVOICES?$select=IVNUM,IVDATE,AGENTCODE,CUSTNAME,CDES,STATDES,TOTPRICE,DETAILS&$filter=${encodeURIComponent(filter)}&$orderby=IV desc&$top=10`);
-      return {...result, value:(result.value || []).filter(row => String(row.AGENTCODE) === agent)};
+      const filter = `AGENTCODE eq '${odataStr(agent)}'` + (before ? ` and IV lt ${before}` : '');
+      // Read one extra row to know whether another page exists. The internal IV
+      // cursor keeps new invoices from shifting older pages during browsing.
+      const result = await priority('GET', `AINVOICES?$select=IV,IVNUM,IVDATE,AGENTCODE,CUSTNAME,CDES,STATDES,TOTPRICE,DETAILS,OWNERLOGIN&$filter=${encodeURIComponent(filter)}&$orderby=IV desc&$top=11`);
+      const rows = (result.value || []).filter(row => String(row.AGENTCODE) === agent && (!before || Number(row.IV) < Number(before)));
+      const page = rows.slice(0,10), hasMore = rows.length > 10;
+      const nextBefore = hasMore ? String(page[page.length - 1].IV) : null;
+      if (hasMore && (!/^[1-9][0-9]*$/.test(nextBefore) || !Number.isSafeInteger(Number(nextBefore)))) throw Error('לא התקבל מזהה חשבונית תקין להמשך הרשימה');
+      return {...result, value:page.map(({IV, OWNERLOGIN, ...row}) => ({...row, canManageDocuments:OWNERLOGIN === USER})), hasMore, nextBefore};
     }
     if (!custname || custname.length > 16) throw badRequest('יש לבחור לקוח להצגת החשבוניות שלו.');
     const filter = `OWNERLOGIN eq '${odataStr(USER)}' and CUSTNAME eq '${odataStr(custname)}'`;
@@ -437,6 +455,41 @@ const handlers = {
   },
 
   'GET /api/mail/status': async () => mailer.status(),
+  // Explicit resend is a separate intent, independent of the original issuance send.
+  'GET /api/invoices/resend-options': async q => {
+    const ivnum = String(q.get('ivnum') || '').trim();
+    const inv = await ownedInvoice(ivnum);
+    const profile = await sdk.digitalCustomerForm(inv.CUSTNAME);
+    return {ivnum, custname:inv.CUSTNAME, name:profile.name || '', email:profile.email || '', configured:mailer.status().configured};
+  },
+  'POST /api/invoices/resend-original': async (_q, body) => {
+    if (body?.consent !== true) throw badRequest('יש לאשר את כתובת הנמען לשליחה חוזרת');
+    const ivnum = String(body.ivnum || '').trim();
+    const email = digital.emailAddress(body.email);
+    const requestId = String(body.requestId || '');
+    if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId)) throw badRequest('חסר מזהה בקשת שליחה חוזרת תקין');
+    const inv = await ownedInvoice(ivnum);
+    const resendKey = digital.keyFor(API_BASE, 'resend:' + requestId);
+    await delivery.bind(resendKey, createHash('sha256').update(JSON.stringify({iv:inv.IV, custname:inv.CUSTNAME, email})).digest('hex'));
+    const previous = await delivery.read(resendKey, 'mail-resend');
+    if (previous?.status === 'complete') return previous.result;
+    if (previous) {
+      // Join an in-flight attempt in this process; persisted uncertain attempts
+      // remain blocked by once() after a restart, without starting another send.
+      return delivery.once(resendKey, 'mail-resend', async () => {
+        throw badRequest('תוצאת השליחה החוזרת הקודמת אינה ודאית. יש לבדוק בתיבה השולחת לפני בקשת משלוח חדשה.');
+      });
+    }
+    // Reuse the existing original; never print, regenerate or change the customer.
+    const {__file:file} = await handlers['GET /api/invoices/existing-original']({get:key => key === 'ivnum' ? ivnum : null});
+    mailer.validateOriginal?.(file.buffer);
+    await mailer.verify();
+    return delivery.once(resendKey, 'mail-resend', async () => {
+      const result = await mailer.sendOriginal({ivnum, email, buffer:file.buffer, workflowKey:resendKey});
+      if (result.acceptedByMailServer !== true) throw Error('שרת הדואר לא אישר את בקשת השליחה החוזרת. יש לבדוק בתיבה השולחת לפני ניסיון נוסף.');
+      return {...result, ivnum, email, sha256:createHash('sha256').update(file.buffer).digest('hex')};
+    });
+  },
   'POST /api/invoices/email-original': async (_q, body) => {
     const ivnum = String(body?.ivnum || '').trim();
     const email = digital.emailAddress(body?.email);
@@ -452,6 +505,7 @@ const handlers = {
     if (!profile.digital || profile.email !== email) throw badRequest('כתובת הלקוח בפריוריטי השתנתה. המשלוח נעצר.');
     // Read precisely the same attachment used by the download endpoint.
     const { __file: file } = await handlers['GET /api/invoices/existing-original']({ get: key => key === 'ivnum' ? ivnum : null });
+    mailer.validateOriginal?.(file.buffer);
     await mailer.verify();
     return delivery.once(inv.workflowKey, 'mail', async () => ({
       ...await mailer.sendOriginal({ ivnum, email, buffer: file.buffer, workflowKey: inv.workflowKey }),

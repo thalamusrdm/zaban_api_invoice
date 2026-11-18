@@ -1,0 +1,329 @@
+{
+  "date": "2026-11-16",
+  "phone": [
+    {
+      "screen": "start",
+      "heading": "מה עושים עכשיו?",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "customer",
+      "heading": "למי החשבונית?",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "products",
+      "heading": "מה מוסיפים לחשבונית?",
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "screen": "review",
+      "heading": "בודקים לפני ההפקה",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "processing",
+      "heading": "מפיקים את החשבונית",
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "screen": "signature",
+      "heading": "עיון וחתימת לקוח",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "success",
+      "heading": "החתימה נשמרה",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "invoices",
+      "heading": "החשבוניות שלי",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "invoice",
+      "heading": "חשבונית DEMO-001",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "recovery",
+      "heading": "הסגירה עדיין לא אומתה",
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "screen": "customer-missing",
+      "heading": "למי החשבונית?",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "customer-error",
+      "heading": "למי החשבונית?",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "product-error",
+      "heading": "מה מוסיפים לחשבונית?",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "rate-error",
+      "heading": "מה מוסיפים לחשבונית?",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "duplicate",
+      "heading": "נמצאה חשבונית עם אותו מזהה",
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "screen": "offline",
+      "heading": "אין חיבור לפריוריטי",
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "screen": "original-error",
+      "heading": "החשבונית סופית; המקור בבדיקה",
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "screen": "download-error",
+      "heading": "המקור מוכן להורדה",
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "screen": "mail-uncertain",
+      "heading": "החשבונית הופקה; המייל בבדיקה",
+      "scrollWidth": 375,
+      "width": 375
+    },
+    {
+      "screen": "signature-error",
+      "heading": "עיון וחתימת לקוח",
+      "scrollWidth": 375,
+      "width": 375
+    }
+  ],
+  "tablet": [
+    {
+      "screen": "start",
+      "heading": "מה עושים עכשיו?",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "customer",
+      "heading": "למי החשבונית?",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "products",
+      "heading": "מה מוסיפים לחשבונית?",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "review",
+      "heading": "בודקים לפני ההפקה",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "processing",
+      "heading": "מפיקים את החשבונית",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "signature",
+      "heading": "עיון וחתימת לקוח",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "success",
+      "heading": "החתימה נשמרה",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "invoices",
+      "heading": "החשבוניות שלי",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "invoice",
+      "heading": "חשבונית DEMO-001",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "recovery",
+      "heading": "הסגירה עדיין לא אומתה",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "customer-missing",
+      "heading": "למי החשבונית?",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "customer-error",
+      "heading": "למי החשבונית?",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "product-error",
+      "heading": "מה מוסיפים לחשבונית?",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "rate-error",
+      "heading": "מה מוסיפים לחשבונית?",
+      "scrollWidth": 819,
+      "width": 819
+    },
+    {
+      "screen": "duplicate",
+      "heading": "נמצאה חשבונית עם אותו מזהה",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "offline",
+      "heading": "אין חיבור לפריוריטי",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "original-error",
+      "heading": "החשבונית סופית; המקור בבדיקה",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "download-error",
+      "heading": "המקור מוכן להורדה",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "mail-uncertain",
+      "heading": "החשבונית הופקה; המייל בבדיקה",
+      "scrollWidth": 834,
+      "width": 834
+    },
+    {
+      "screen": "signature-error",
+      "heading": "עיון וחתימת לקוח",
+      "scrollWidth": 834,
+      "width": 834
+    }
+  ],
+  "extra": [
+    {
+      "screen": "customer",
+      "viewport": {
+        "width": 320,
+        "height": 812
+      },
+      "canvasHeight": null,
+      "scrollWidth": 305,
+      "width": 305
+    },
+    {
+      "screen": "products",
+      "viewport": {
+        "width": 320,
+        "height": 812
+      },
+      "canvasHeight": null,
+      "scrollWidth": 305,
+      "width": 305
+    },
+    {
+      "screen": "review",
+      "viewport": {
+        "width": 320,
+        "height": 812
+      },
+      "canvasHeight": null,
+      "scrollWidth": 305,
+      "width": 305
+    },
+    {
+      "screen": "signature",
+      "viewport": {
+        "width": 320,
+        "height": 812
+      },
+      "canvasHeight": 220,
+      "scrollWidth": 305,
+      "width": 305
+    },
+    {
+      "screen": "customer",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "canvasHeight": null,
+      "scrollWidth": 1009,
+      "width": 1009
+    },
+    {
+      "screen": "products",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "canvasHeight": null,
+      "scrollWidth": 1009,
+      "width": 1009
+    },
+    {
+      "screen": "review",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "canvasHeight": null,
+      "scrollWidth": 1009,
+      "width": 1009
+    },
+    {
+      "screen": "signature",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "canvasHeight": 240,
+      "scrollWidth": 1009,
+      "width": 1009
+    }
+  ]
+}

@@ -20,6 +20,7 @@ let openSignedInvoice;
   openSignedInvoice = async (ivnum, button) => {
     const currentRequest = ++request;
     clearDocument();
+    status.removeAttribute('data-state');
     document.getElementById('signedCopyTitle').textContent = 'העתק חתום · ' + ivnum;
     status.textContent = 'טוען את ההעתק החתום מהנספחים בפריוריטי…';
     if (!dialog.open) dialog.showModal();
@@ -41,7 +42,7 @@ let openSignedInvoice;
       link.hidden = false;
       status.textContent = 'ההעתק החתום נטען מהנספחים של חשבונית ' + ivnum + ' בפריוריטי.';
     } catch (error) {
-      if (request === currentRequest) status.textContent = error.message;
+      if (request === currentRequest) { status.setAttribute('data-state', 'error'); status.textContent = error.message; }
     } finally {
       if (button) button.disabled = false;
     }

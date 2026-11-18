@@ -5,14 +5,14 @@ const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
 
-function signatureUI({failSave=false,unverified=false}={}){
+function signatureUI({failSave=false,unverified=false,bounds={width:640,height:180}}={}){
   const nodes=new Map(),calls=[];
   function get(id){
     if(!nodes.has(id))nodes.set(id,{value:'',attributes:{},listeners:{},width:640,height:180,
       setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];},
       addEventListener(k,fn){this.listeners[k]=fn;},setPointerCapture(){},
-      getBoundingClientRect(){return {left:0,top:0,width:640,height:180};},
-      getContext(){return {fillRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}};},
+      getBoundingClientRect(){return {left:0,top:0,...bounds};},
+      getContext(){const node=this;return {fillRect(){node.clears=(node.clears||0)+1;},beginPath(){},moveTo(){},lineTo(){},stroke(){}};},
       toDataURL(){return 'data:image/png;base64,test';}});
     return nodes.get(id);
   }
@@ -54,4 +54,15 @@ test('an unverified attachment never shows thanks or leaves the signature step',
   const ui=signatureUI({unverified:true});await ui.open();ui.get('signatureName').value='דור עזריאל';ui.draw();await ui.save();
   assert.equal(ui.calls.some(x=>typeof x==='string'&&x.startsWith('thanks:')),false);
   assert.equal(ui.get('saveSignature').disabled,false);
+});
+
+ test('responsive signature fits phone and tablet proportions without clearing existing strokes on another stroke',async()=>{
+  for(const bounds of [{width:346,height:220},{width:320,height:240}]){
+    const ui=signatureUI({bounds});await ui.open();ui.draw();
+    const canvas=ui.get('signatureCanvas');
+    assert.equal(canvas.height,Math.round(640*bounds.height/bounds.width));
+    const clears=canvas.clears;
+    ui.draw();assert.equal(canvas.clears,clears);
+    ui.get('clearSignature').listeners.click();assert.equal(canvas.clears,clears+1);
+  }
 });

@@ -25,3 +25,9 @@ data/originals/
 
 # Private digital delivery and signed invoice copies
 data/delivery/
+
+# Microsoft authorization cache (DPAPI-encrypted, tied to the server user)
+data/mail/
+
+# Local HTTPS development certificate (private leaf key)
+.local-https/

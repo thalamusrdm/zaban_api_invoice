@@ -1,0 +1,933 @@
+{
+  "states": [
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "00-start"
+    },
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "00-start"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "למי החשבונית?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "01-customer"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "למי החשבונית?"
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "01-customer"
+    },
+    {
+      "fields": [
+        {
+          "name": "כמות",
+          "width": 93.296875,
+          "y": 428.40625
+        },
+        {
+          "name": "מחיר בש״ח לגרם",
+          "width": 134.765625,
+          "y": 428.40625
+        },
+        {
+          "name": "הנחה לשורה באחוזים",
+          "width": 82.9375,
+          "y": 428.40625
+        }
+      ],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "מה מוסיפים לחשבונית?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "02-products"
+    },
+    {
+      "fields": [
+        {
+          "name": "כמות",
+          "width": 145.796875,
+          "y": 446.578125
+        },
+        {
+          "name": "מחיר בש״ח לגרם",
+          "width": 210.59375,
+          "y": 446.578125
+        },
+        {
+          "name": "הנחה לשורה באחוזים",
+          "width": 129.609375,
+          "y": 446.578125
+        }
+      ],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "מה מוסיפים לחשבונית?"
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "02-products"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "בודקים ומפיקים"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "03-review"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "בודקים ומפיקים"
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "03-review"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "העתק חשבונית IN900000001 לחתימה"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "05-signature"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "העתק חשבונית IN900000001 לחתימה"
+      ],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "05-signature"
+    },
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "06-completion"
+    },
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "06-completion"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "למי החשבונית?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "07-recent"
+    },
+    {
+      "fields": [],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "למי החשבונית?"
+      ],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "07-recent"
+    },
+    {
+      "alert": [],
+      "dialogs": [
+        {
+          "height": 725.375,
+          "left": 19,
+          "top": 59.3125,
+          "width": 337
+        }
+      ],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "08-signed-document"
+    },
+    {
+      "alert": [],
+      "dialogs": [
+        {
+          "height": 993.28125,
+          "left": 19,
+          "top": 100.359375,
+          "width": 781
+        }
+      ],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "08-signed-document"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "07-recent"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "07-recent"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show warn",
+          "text": "החשבונית T900000001 כבר נוצרה, אך הסגירה לא אומתה: הסגירה לא אומתה — דמה\nאין להפיק אותה שוב. אפשר לבדוק בפריוריטי או לנסות לסגור את אותה טיוטה.\nניסיון סגירה חוזר"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "09-close-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show warn",
+          "text": "החשבונית T900000001 כבר נוצרה, אך הסגירה לא אומתה: הסגירה לא אומתה — דמה\nאין להפיק אותה שוב. אפשר לבדוק בפריוריטי או לנסות לסגור את אותה טיוטה.\nניסיון סגירה חוזר"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "09-close-error"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "10-customer-missing"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "10-customer-missing"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "11-customer-save-error"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "11-customer-save-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "field-note",
+          "text": "לא ניתן לאמת את פרטי הלקוח. שמירת פרטי הלקוח נכשלה — דמה"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "11-customer-save-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "field-note",
+          "text": "לא ניתן לאמת את פרטי הלקוח. שמירת פרטי הלקוח נכשלה — דמה"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "11-customer-save-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show err",
+          "text": "לא נמצאה התאמה מדויקת. בדקו את הקוד או חפשו לפי תיאור ובחרו מוצר מהרשימה."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [
+        93.296875,
+        134.765625,
+        82.9375
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "12-unknown-product"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show err",
+          "text": "לא נמצאה התאמה מדויקת. בדקו את הקוד או חפשו לפי תיאור ובחרו מוצר מהרשימה."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [
+        145.796875,
+        210.59375,
+        129.609375
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "12-unknown-product"
+    },
+    {
+      "alert": [
+        {
+          "class": "step-error",
+          "text": "בשורה 1 חסר מחיר או שער דולר. המתינו לטעינה או בחרו מוצר עם מחיר תקין."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [
+        93.296875,
+        134.765625,
+        82.9375
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "13-exchange-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "step-error",
+          "text": "בשורה 1 חסר מחיר או שער דולר. המתינו לטעינה או בחרו מוצר עם מחיר תקין."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [
+        145.796875,
+        210.59375,
+        129.609375
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "13-exchange-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show warn",
+          "text": "⚠️ כבר קיימת חשבונית עם המזהה הזה: IN900000001 (סופית, 413.00 ₪).\nכדי להפיק בכל זאת — שנו את שדה הפרטים ושלחו שוב."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "14-duplicate"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show warn",
+          "text": "⚠️ כבר קיימת חשבונית עם המזהה הזה: IN900000001 (סופית, 413.00 ₪).\nכדי להפיק בכל זאת — שנו את שדה הפרטים ושלחו שוב."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "14-duplicate"
+    },
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "15-offline"
+    },
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "15-offline"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show warn",
+          "text": "החשבונית IN900000001 סופית, אך הכנת המקור לא אומתה: שמירת המקור לא אומתה — דמה. אין להפיק חשבונית נוספת. לא נשלח מייל. בדיקת המקור הקיים והמשך הורדה"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "16-original-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show warn",
+          "text": "החשבונית IN900000001 סופית, אך הכנת המקור לא אומתה: שמירת המקור לא אומתה — דמה. אין להפיק חשבונית נוספת. לא נשלח מייל. בדיקת המקור הקיים והמשך הורדה"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "16-original-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show ok",
+          "text": "המסמך של חשבונית IN900000001 נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת. שרת הדואר קיבל את המקור לשליחה אל demo@example.com. זה אינו אישור מסירה לתיבת הלקוח."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "17-download-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show ok",
+          "text": "המסמך של חשבונית IN900000001 נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת. שרת הדואר קיבל את המקור לשליחה אל demo@example.com. זה אינו אישור מסירה לתיבת הלקוח."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "17-download-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show warn",
+          "text": "המסמך של חשבונית IN900000001 נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת. משלוח המקור במייל לא אומת: משלוח המייל לא אומת — דמה אין להפיק חשבונית נוספת."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "18-mail-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show warn",
+          "text": "המסמך של חשבונית IN900000001 נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת. משלוח המקור במייל לא אומת: משלוח המייל לא אומת — דמה אין להפיק חשבונית נוספת."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "18-mail-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "",
+          "text": "שמירת החתימה לא אומתה: שמירת החתימה לא אומתה — דמה. החתימה נשארה על המסך; אין להפיק חשבונית נוספת."
+        },
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show ok",
+          "text": "המסמך של חשבונית IN900000001 נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת. שרת הדואר קיבל את המקור לשליחה אל demo@example.com. זה אינו אישור מסירה לתיבת הלקוח."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "19-signature-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "",
+          "text": "שמירת החתימה לא אומתה: שמירת החתימה לא אומתה — דמה. החתימה נשארה על המסך; אין להפיק חשבונית נוספת."
+        },
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show ok",
+          "text": "המסמך של חשבונית IN900000001 נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת. שרת הדואר קיבל את המקור לשליחה אל demo@example.com. זה אינו אישור מסירה לתיבת הלקוח."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "19-signature-error"
+    },
+    {
+      "alert": [],
+      "dialogs": [
+        {
+          "height": 504.53125,
+          "left": 19,
+          "top": 169.734375,
+          "width": 337
+        }
+      ],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "04-progress"
+    },
+    {
+      "alert": [],
+      "dialogs": [
+        {
+          "height": 482.9375,
+          "left": 197,
+          "top": 355.53125,
+          "width": 440
+        }
+      ],
+      "fieldWidths": [],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "04-progress"
+    },
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "20-empty"
+    },
+    {
+      "fields": [],
+      "footerVisible": false,
+      "heading": [
+        "איזו חשבונית להפיק?"
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "20-empty"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show err",
+          "text": "לא נמצאה התאמה מדויקת. בדקו את הקוד או חפשו לפי תיאור ובחרו מוצר מהרשימה."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [
+        93.296875,
+        134.765625,
+        82.9375
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "12-unknown-product"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show err",
+          "text": "לא נמצאה התאמה מדויקת. בדקו את הקוד או חפשו לפי תיאור ובחרו מוצר מהרשימה."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [
+        145.796875,
+        210.59375,
+        129.609375
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "12-unknown-product"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [
+        93.296875,
+        134.765625,
+        82.9375,
+        93.296875,
+        134.765625,
+        82.9375
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "21-lab-products"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [
+        141.296875,
+        204.09375,
+        125.609375,
+        141.296875,
+        204.09375,
+        125.609375
+      ],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "21-lab-products"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "22-company-edit"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "22-company-edit"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "23-invoice-options"
+    },
+    {
+      "alert": [],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "23-invoice-options"
+    },
+    {
+      "fields": [
+        {
+          "name": "כמות",
+          "width": 93.296875,
+          "y": 428.40625
+        },
+        {
+          "name": "מחיר בש״ח לגרם",
+          "width": 134.765625,
+          "y": 428.40625
+        },
+        {
+          "name": "הנחה לשורה באחוזים",
+          "width": 82.9375,
+          "y": 428.40625
+        }
+      ],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "מה מוסיפים לחשבונית?"
+      ],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "02-products"
+    },
+    {
+      "fields": [
+        {
+          "name": "כמות",
+          "width": 145.796875,
+          "y": 446.578125
+        },
+        {
+          "name": "מחיר בש״ח לגרם",
+          "width": 210.59375,
+          "y": 446.578125
+        },
+        {
+          "name": "הנחה לשורה באחוזים",
+          "width": 129.609375,
+          "y": 446.578125
+        }
+      ],
+      "footerVisible": true,
+      "heading": [
+        "חשבונית זהב",
+        "מה מוסיפים לחשבונית?"
+      ],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "02-products"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show warn",
+          "text": "החשבונית IN900000001 קיימת בפריוריטי, אבל הורדת המסמך נכשלה: ההורדה נחסמה — דמה. אפשר לנסות שוב דרך כפתור ההורדה; אין צורך להפיק חשבונית נוספת."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "17-download-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "msg show ok",
+          "text": "✔ החשבונית נסגרה: IN900000001 · סופית\nמכין את המסמך להורדה… הורדה חוזרת ⬇ הורדת העתק"
+        },
+        {
+          "class": "msg show warn",
+          "text": "החשבונית IN900000001 קיימת בפריוריטי, אבל הורדת המסמך נכשלה: ההורדה נחסמה — דמה. אפשר לנסות שוב דרך כפתור ההורדה; אין צורך להפיק חשבונית נוספת."
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "17-download-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "",
+          "text": "אין העתק חתום בנספחים — דמה"
+        }
+      ],
+      "dialogs": [
+        {
+          "height": 203.5625,
+          "left": 19,
+          "top": 320.21875,
+          "width": 337
+        }
+      ],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "24-signed-missing"
+    },
+    {
+      "alert": [
+        {
+          "class": "",
+          "text": "אין העתק חתום בנספחים — דמה"
+        }
+      ],
+      "dialogs": [
+        {
+          "height": 193.1875,
+          "left": 19,
+          "top": 500.40625,
+          "width": 781
+        }
+      ],
+      "fieldWidths": [],
+      "scrollWidth": 819,
+      "viewport": 834,
+      "screen": "24-signed-missing"
+    },
+    {
+      "alert": [
+        {
+          "class": "field-note",
+          "text": "לא ניתן לאמת את פרטי הלקוח. שמירת פרטי הלקוח נכשלה — דמה"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 375,
+      "viewport": 390,
+      "screen": "11-customer-save-error"
+    },
+    {
+      "alert": [
+        {
+          "class": "field-note",
+          "text": "לא ניתן לאמת את פרטי הלקוח. שמירת פרטי הלקוח נכשלה — דמה"
+        }
+      ],
+      "dialogs": [],
+      "fieldWidths": [],
+      "scrollWidth": 834,
+      "viewport": 834,
+      "screen": "11-customer-save-error"
+    }
+  ],
+  "additional": [
+    {
+      "fields": [
+        {
+          "width": 75.890625,
+          "y": 465.015625
+        },
+        {
+          "width": 109.640625,
+          "y": 465.015625
+        },
+        {
+          "width": 67.46875,
+          "y": 465.015625
+        }
+      ],
+      "footer": 305,
+      "scrollWidth": 305,
+      "viewport": 320
+    },
+    {
+      "fields": [
+        {
+          "width": 107.09375,
+          "y": 446.578125
+        },
+        {
+          "width": 154.703125,
+          "y": 446.578125
+        },
+        {
+          "width": 95.203125,
+          "y": 446.578125
+        }
+      ],
+      "footer": 705,
+      "scrollWidth": 705,
+      "viewport": 720
+    },
+    {
+      "fields": [
+        {
+          "width": 198.296875,
+          "y": 446.578125
+        },
+        {
+          "width": 286.421875,
+          "y": 446.578125
+        },
+        {
+          "width": 176.28125,
+          "y": 446.578125
+        }
+      ],
+      "footer": 1009,
+      "scrollWidth": 1009,
+      "viewport": 1024
+    }
+  ]
+}

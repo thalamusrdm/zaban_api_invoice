@@ -1,0 +1,83 @@
+- banner:
+  - heading "צבאן חשבוניות" [level=1]
+  - generic: "מחובר · חברה: הדגמה מקומית בלבד"
+- text: ✓
+- region "חשבונית זהב":
+  - navigation "שלבי הפקת חשבונית":
+    - button "1 לקוח":
+      - generic: "1"
+      - text: לקוח
+    - button "2 מוצרים":
+      - generic: "2"
+      - text: מוצרים
+    - button "3 בדיקה והפקה":
+      - generic: "3"
+      - text: בדיקה והפקה
+    - button "4 חתימת לקוח" [disabled]:
+      - generic: "4"
+      - text: חתימת לקוח
+  - heading "חשבונית זהב" [level=2]
+  - button "החלפת סוג חשבונית"
+  - region "מה מוסיפים לחשבונית?":
+    - heading "מה מוסיפים לחשבונית?" [level=2]
+    - paragraph: בחרו מוצר והזינו כמות בגרמים ומחיר בש״ח לגרם.
+    - region "שורות החשבונית":
+      - table:
+        - rowgroup:
+          - row "מק״ט / מוצר כמות מחיר בש״ח לגרם הנחה (%) סה״כ (₪) מחיקה":
+            - columnheader "מק״ט / מוצר"
+            - columnheader "כמות"
+            - columnheader "מחיר בש״ח לגרם"
+            - columnheader "הנחה (%)"
+            - columnheader "סה״כ (₪)"
+            - columnheader "מחיקה": ×
+        - rowgroup:
+          - row "14 זהב 14 קראט — הדגמה כמות 1 גרם מחיר בש״ח לגרם הנחה (%) 0 סה״כ (₪) 630.00 ₪ הסרה✕":
+            - cell "14 זהב 14 קראט — הדגמה":
+              - textbox "מק״ט או ברקוד":
+                - /placeholder: מק"ט, ברקוד או תיאור…
+                - text: "14"
+              - generic: זהב 14 קראט — הדגמה
+            - cell "כמות 1 גרם":
+              - text: כמות
+              - spinbutton "כמות": "2"
+              - generic: גרם
+            - cell "מחיר בש״ח לגרם":
+              - text: מחיר בש״ח לגרם
+              - spinbutton "מחיר בש״ח לגרם": "350"
+            - text: שער לש״ח
+            - cell "הנחה (%) 0":
+              - text: הנחה (%)
+              - spinbutton "הנחה לשורה באחוזים": "10"
+            - cell "סה״כ (₪) 630.00 ₪"
+            - cell "הסרה✕":
+              - button "הסרה✕"
+    - button "+ הוספת שורה"
+    - generic "הנחות"
+    - complementary "תקציר החשבונית":
+      - heading "החשבונית בקצרה" [level=3]
+      - strong: לקוח הדגמה לתכנון UX
+      - paragraph: לקוח 900001
+      - term: סוג
+      - definition: זהב
+      - term: תאריך
+      - definition: 16.11.2026
+      - term: סוכן / מחסן
+      - definition: 90 / 1
+      - generic "סיכום המוצרים":
+        - term: סה״כ כמות
+        - definition: 2 גרם
+      - term: לפני מע״מ
+      - definition: 630.00 ₪
+      - term: מע״מ 18%
+      - definition: 113.40 ₪
+      - term: סה״כ
+      - definition: 743.40 ₪
+      - paragraph:
+        - text: סכומים לתצוגה מקדימה.
+        - text: הסכום הסופי ייקבע בפריוריטי.
+  - button "חזרה"
+  - generic: שלב 2 מתוך 4
+  - generic: "לפני מע״מ: 630.00 ₪"
+  - button "המשך לבדיקה"
+  - generic "חשבוניות אחרונות לקוח הדגמה לתכנון UX"

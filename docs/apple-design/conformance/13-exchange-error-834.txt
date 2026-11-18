@@ -1,0 +1,87 @@
+- banner:
+  - heading "צבאן חשבוניות" [level=1]
+  - generic: "מחובר · חברה: הדגמה מקומית בלבד"
+- text: ✓
+- region "חשבונית יהלומים":
+  - navigation "שלבי הפקת חשבונית":
+    - button "1 לקוח":
+      - generic: "1"
+      - text: לקוח
+    - button "2 מוצרים":
+      - generic: "2"
+      - text: מוצרים
+    - button "3 בדיקה והפקה":
+      - generic: "3"
+      - text: בדיקה והפקה
+    - button "4 חתימת לקוח" [disabled]:
+      - generic: "4"
+      - text: חתימת לקוח
+  - heading "חשבונית יהלומים" [level=2]
+  - button "החלפת סוג חשבונית"
+  - region "מה מוסיפים לחשבונית?":
+    - heading "מה מוסיפים לחשבונית?" [level=2]
+    - paragraph: בחרו מוצר והזינו כמות. המחיר והשער מתמלאים אוטומטית.
+    - region "שורות החשבונית":
+      - table:
+        - rowgroup:
+          - row "מק״ט / מוצר כמות מחיר ($) שער לש״ח הנחה (%) סה״כ (₪) מחיקה":
+            - columnheader "מק״ט / מוצר"
+            - columnheader "כמות"
+            - columnheader "מחיר ($)"
+            - columnheader "שער לש״ח"
+            - columnheader "הנחה (%)"
+            - columnheader "סה״כ (₪)"
+            - columnheader "מחיקה": ×
+        - rowgroup:
+          - 'row "D001 יהלום — הדגמה · מחירון בסיס: 200 USD כמות 1 יחידה מחיר ($) שער לש״ח 1 הנחה (%) 0 סה״כ (₪) חסר שער הסרה✕"':
+            - 'cell "D001 יהלום — הדגמה · מחירון בסיס: 200 USD"':
+              - textbox "מק״ט או ברקוד":
+                - /placeholder: מק"ט, ברקוד או תיאור…
+                - text: D001
+              - generic: "יהלום — הדגמה · מחירון בסיס: 200 USD"
+            - cell "כמות 1 יחידה":
+              - text: כמות
+              - spinbutton "כמות": "1"
+              - generic: יחידה
+            - cell "מחיר ($)":
+              - text: מחיר ($)
+              - spinbutton "מחיר בדולרים ליחידה": "200"
+            - cell "שער לש״ח 1":
+              - text: שער לש״ח
+              - spinbutton "שער חליפין לש״ח"
+            - cell "הנחה (%) 0":
+              - text: הנחה (%)
+              - spinbutton "הנחה לשורה באחוזים": "0"
+            - cell "סה״כ (₪) חסר שער"
+            - cell "הסרה✕":
+              - button "הסרה✕"
+    - button "+ הוספת שורה"
+    - generic "הנחות ושער דולר"
+    - complementary "תקציר החשבונית":
+      - heading "החשבונית בקצרה" [level=3]
+      - strong: לקוח הדגמה לתכנון UX
+      - paragraph: לקוח 900001
+      - term: סוג
+      - definition: יהלומים
+      - term: תאריך
+      - definition: 16.11.2026
+      - term: סוכן / מחסן
+      - definition: 90 / 1
+      - generic "סיכום המוצרים":
+        - term: סה״כ כמות
+        - definition: "1"
+      - term: לפני מע״מ
+      - definition: —
+      - term: מע״מ 18%
+      - definition: —
+      - term: סה״כ
+      - definition: —
+      - paragraph:
+        - text: סכומים לתצוגה מקדימה.
+        - text: הסכום הסופי ייקבע בפריוריטי.
+  - alert [active]: בשורה 1 חסר מחיר או שער דולר. המתינו לטעינה או בחרו מוצר עם מחיר תקין.
+  - button "חזרה"
+  - generic: שלב 2 מתוך 4
+  - generic: "לפני מע״מ: —"
+  - button "המשך לבדיקה"
+  - generic "חשבוניות אחרונות לקוח הדגמה לתכנון UX"

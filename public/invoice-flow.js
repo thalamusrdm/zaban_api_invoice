@@ -14,6 +14,12 @@ let completeSignatureFlow;
 
   function review() {
     el('reviewCustomer').textContent = el('custSearch').value;
+    if (el('reviewDeliveryNote')) {
+      const sendMail = el('sendOriginalEmail')?.checked === true;
+      el('reviewDeliveryNote').textContent = 'המקור יישמר בפריוריטי. ' +
+        (sendMail ? 'אותו מקור יישלח גם למייל ' + el('customerEmail').value.trim() + '. ' : 'ללא משלוח מייל. ') +
+        'נמשיך לחתימת הלקוח. המקור יהיה זמין בסיום בלחיצה על ״הורדת מקור״.';
+    }
     const date = el('date').value;
     el('reviewDate').textContent = date ? date.split('-').reverse().join('.') : '—';
     el('reviewDetails').textContent = el('details').value;
@@ -31,6 +37,9 @@ let completeSignatureFlow;
 
   function showStep(index, focus = true) {
     currentStep = index;
+    form.setAttribute('data-flow-step', String(index));
+    el('submit').hidden = index !== 2;
+    if (el('saveSignature')) el('saveSignature').hidden = index !== 3;
     panels.forEach((panel, i) => { panel.hidden = i !== index; });
     stepButtons.forEach((button, i) => {
       button.disabled = signingInvoice ? i !== 3 : i === 3;
@@ -99,10 +108,18 @@ let completeSignatureFlow;
         savingCustomer = el('nextStep').disabled = false;
       }
     }
-    if (index > currentStep && index === 2 && !validateStep(1)) return;
+    if (index > currentStep && index === 2) {
+      const fromStep = currentStep;
+      if (!await validateProductSelections()) {
+        if (currentStep !== 1) showStep(1, false);
+        return;
+      }
+      if (currentStep !== fromStep || !validateStep(1)) return;
+    }
     showStep(index);
   }
 
+  el('sendOriginalEmail')?.addEventListener('change', () => { if (currentStep === 2) review(); });
   el('nextStep').addEventListener('click', () => navigate(Math.min(currentStep + 1, 2)));
   el('previousStep').addEventListener('click', () => navigate(Math.max(currentStep - 1, 0)));
   stepButtons.forEach(button => button.addEventListener('click', () => navigate(Number(button.dataset.step))));
@@ -150,6 +167,12 @@ let completeSignatureFlow;
     el('typePicker').hidden = false;
     el('completionDetails').textContent = `ההעתק החתום של חשבונית ${ivnum} נשמר ואומת בנספחים בפריוריטי. אפשר להתחיל חשבונית חדשה.`;
     el('completionNotice').hidden = false;
+    if (el('completionOriginal')) {
+      el('completionOriginal').dataset.iv = ivnum;
+      el('completionOriginal').hidden = false;
+      el('completionDocumentStatus').className = 'msg';
+      el('completionDocumentStatus').textContent = '';
+    }
     el('msg').className = 'msg';
     el('documentMsg').className = 'msg';
     el('custSearch').value = '';

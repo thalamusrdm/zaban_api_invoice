@@ -25,7 +25,7 @@ test('customer setup saves contact details and electronic documents together and
     module: { exports: {} },
     process: { env: { PRIORITY_BASE_URL: 'https://test.invalid/odata/config' } },
     setTimeout() { return { unref() {} }; },
-    require() { return sdk; },
+    require(name) { return name === './public/customer-tax' ? require('../public/customer-tax') : sdk; },
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../priority-sdk.js'), 'utf8'), context);
   const { prepareDigitalCustomer } = context.module.exports;

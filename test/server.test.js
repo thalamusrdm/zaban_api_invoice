@@ -18,6 +18,7 @@ function isolatedServer(getResponse, responseStatus = 200, sdk = {}, store, orig
       if (name === './priority-sdk') return sdk;
       if (name === './invoice-mail') return { createMailer: () => mailer || require('../invoice-mail').createMailer({}) };
       if (name === './invoice-payload') return require('../invoice-payload');
+      if (name === './public/part-lookup') return require('../public/part-lookup');
       if (name === './exchange-rates') return require('../exchange-rates');
       if (name === './original-documents') return originals ? {originalStore:()=>originals} : require('../original-documents');
       if (name === './digital-invoice') return {...require('../digital-invoice'),workflowStore:directory=>store||require('../digital-invoice').workflowStore(directory)};
@@ -107,7 +108,7 @@ test('agent invoice list queries only the selected agent and rejects ambiguous s
   assert.deepEqual(result.body.value.map(row => row.IVNUM), ['IN80']);
   const query = new URL(server.calls[0].url).searchParams;
   assert.equal(query.get('$filter'), "AGENTCODE eq '80'");
-  assert.equal(query.get('$top'), '10');
+  assert.equal(query.get('$top'), '11');
   assert.equal(query.get('$orderby'), 'IV desc');
   for (const url of ['/api/invoices/recent?agent=80&custname=TEST', '/api/invoices/recent?agent=12345678901234567']) {
     assert.equal((await server.request('GET', url)).status, 400);
@@ -184,7 +185,7 @@ test('part search applies the selected classification before the result limit', 
     const server = isolatedServer();
     const result = await server.request('GET', `/api/parts?q=ring&invoiceType=${type}`);
     assert.equal(result.status, 200);
-    assert.equal(server.calls.length, 2);
+    assert.equal(server.calls.length, 3);
     for (const call of server.calls) {
       const url = new URL(call.url);
       assert.equal(call.method, 'GET');
@@ -202,6 +203,77 @@ test('missing or invalid invoice classification cannot trigger an unfiltered par
     assert.equal(result.status, 400);
     assert.equal(server.calls.length, 0);
   }
+});
+
+test('manual exact lookup finds the lab product without relying on prefix or description searches', async () => {
+  const product = { PARTNAME: '735306', BARCODE: '735306', PARTDES: 'Lab bracelet', STATDES: 'פעיל', EDEA_PARTTYPE: '4' };
+  const server = isolatedServer(url => {
+    const filter = new URL(url).searchParams.get('$filter');
+    assert.equal(filter.includes('*'), false);
+    return { value: [product] };
+  });
+  const result = await server.request('GET', '/api/parts?q=735306&invoiceType=4');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.value[0].PARTNAME, '735306');
+  assert.equal(server.calls.length, 1);
+});
+
+test('a failed description lookup preserves matching code suggestions', async () => {
+  const server = isolatedServer(url => {
+    const filter = new URL(url).searchParams.get('$filter');
+    if (filter.includes('PARTDES')) throw new Error('description unavailable');
+    if (filter.includes('735*')) return { value: [{ PARTNAME: '735306', STATDES: 'פעיל', EDEA_PARTTYPE: '4' }] };
+    return { value: [] };
+  });
+  const result = await server.request('GET', '/api/parts?q=735&invoiceType=4');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.partial, true);
+  assert.equal(result.body.value[0].PARTNAME, '735306');
+});
+
+test('partial barcode searches suggest a product but do not treat it as an exact match', async () => {
+  const server = isolatedServer(url => {
+    const filter = new URL(url).searchParams.get('$filter');
+    return { value: filter.includes("BARCODE eq '000123*'")
+      ? [{ PARTNAME: 'LAB-PART', BARCODE: '000123456789', STATDES: 'פעיל', EDEA_PARTTYPE: '4' }] : [] };
+  });
+  const result = await server.request('GET', '/api/parts?q=000123&invoiceType=4');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.value[0].PARTNAME, 'LAB-PART');
+});
+
+test('wrong classification and inactive products are diagnosed without becoming selectable', async () => {
+  for (const [product, reason] of [
+    [{ PARTNAME: '735306', STATDES: 'פעיל', EDEA_PARTTYPE: '2' }, 'wrong_invoice_type'],
+    [{ PARTNAME: '735306', STATDES: 'לא פעיל', EDEA_PARTTYPE: '4' }, 'inactive'],
+  ]) {
+    const server = isolatedServer(url => {
+      const scoped = new URL(url).searchParams.get('$filter').includes('EDEA_PARTTYPE');
+      return { value: scoped ? [] : [product] };
+    });
+    const result = await server.request('GET', '/api/parts?q=735306&invoiceType=4&exact=1');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.value.length, 0);
+    assert.equal(result.body.reason, reason);
+  }
+});
+
+test('long framed barcodes retain leading zeros, and matching identities remain ambiguous', async () => {
+  const barcode = '000123456789012345678901234567';
+  const products = [
+    { PARTNAME: barcode, BARCODE: 'OTHER', STATDES: 'פעיל', EDEA_PARTTYPE: '4' },
+    { PARTNAME: 'SECOND', BARCODE: barcode, STATDES: 'פעיל', EDEA_PARTTYPE: '4' },
+  ];
+  const server = isolatedServer(url => {
+    const filter = new URL(url).searchParams.get('$filter');
+    assert.ok(filter.includes(barcode));
+    assert.equal(filter.includes('\u0002'), false);
+    return { value: products };
+  });
+  const result = await server.request('GET', '/api/parts?q=' + encodeURIComponent('\u0002' + barcode + '\r\n\u0003') + '&invoiceType=4&exact=1');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.value.length, 2);
+  assert.equal(server.calls.length, 1);
 });
 
 test('one public BOI request retrieves both dollar codes without Priority credentials', async () => {
@@ -231,7 +303,7 @@ test('BOI errors are reported without falling back to Priority or a guessed rate
 });
 
 test('scanner lookup uses exact part/barcode matching, type and active status in one GET', async () => {
-  const server = isolatedServer(() => ({ value: [{ PARTNAME: 'REAL-PART', BARCODE: '7290000000001', BASEPLPRICE: 100, BASEPLCODE: 'USD' }] }));
+  const server = isolatedServer(() => ({ value: [{ PARTNAME: 'REAL-PART', BARCODE: '7290000000001', BASEPLPRICE: 100, BASEPLCODE: 'USD', STATDES: 'פעיל', EDEA_PARTTYPE: '4' }] }));
   const result = await server.request('GET', '/api/parts?q=7290000000001&invoiceType=4&exact=1');
   assert.equal(result.status, 200);
   assert.equal(result.body.value[0].PARTNAME, 'REAL-PART');
@@ -417,4 +489,144 @@ test('uncertain original mail is blocked on retry and missing transport blocks b
   const unconfigured=isolatedServer(()=>{throw Error('must not create');},200,sdk,store);
   assert.equal((await unconfigured.request('POST','/api/invoices',{...validDigitalBody(),digitalEmail:false,originalDownload:true,sendOriginalEmail:true})).status,503);
   assert.equal(unconfigured.calls.length,0);
+});
+
+function resendTransport(bytes, {owner='fake-user', attachments} = {}) {
+  return url => url.includes('EXTFILES_SUBFORM')
+    ? {value:attachments || [{EXTFILEDES:'מסמך ממוחשב', EXTFILENAME:'data:application/pdf;base64,' + bytes.toString('base64')}]}
+    : {IV:url.includes('IN124')?124:123, CUSTNAME:'INVOICE-CUSTOMER', OWNERLOGIN:owner};
+}
+const resendBody = () => ({ivnum:'IN123', email:'chosen@example.com', consent:true, requestId:'cdf70483-4d40-4320-85c5-4569db7eac51'});
+
+test('resend options use the invoice customer rather than any customer selected in the browser and do not send or update', async () => {
+  const server=isolatedServer(()=>({IV:123,CUSTNAME:'INVOICE-CUSTOMER',OWNERLOGIN:'fake-user'}),200,{
+    async digitalCustomerForm(customer){assert.equal(customer,'INVOICE-CUSTOMER');return {name:'Test customer',email:'customer@example.com'};},
+  },undefined,undefined,{status:()=>({configured:true})});
+  const result=await server.request('GET','/api/invoices/resend-options?ivnum=IN123&custname=OTHER');
+  assert.equal(result.status,200);
+  assert.deepEqual(result.body,{ivnum:'IN123',custname:'INVOICE-CUSTOMER',name:'Test customer',email:'customer@example.com',configured:true});
+  assert.ok(server.calls.every(call=>call.method==='GET'));
+});
+
+test('explicit resends use exact saved original bytes, deduplicate retries across restart and allow a separate deliberate resend', async t => {
+  const store=await deliveryFixture(t),bytes=Buffer.from('%PDF-1.7 /ByteRange saved original');
+  let sends=0;const keys=[];
+  const mailer={async verify(){},async sendOriginal({ivnum,email,buffer,workflowKey}){
+    sends++;keys.push(workflowKey);assert.deepEqual(buffer,bytes);return {acceptedByMailServer:true,ivnum,email};
+  }};
+  const server=isolatedServer(resendTransport(bytes),200,{},store,undefined,mailer);
+  const body=resendBody();
+  const results=await Promise.all([server.request('POST','/api/invoices/resend-original',body),server.request('POST','/api/invoices/resend-original',body)]);
+  assert.equal(results[0].status,200);assert.equal(results[1].status,200);assert.equal(sends,1);
+  const restarted=isolatedServer(resendTransport(bytes),200,{},store,undefined,mailer);
+  assert.equal((await restarted.request('POST','/api/invoices/resend-original',body)).status,200);assert.equal(sends,1);
+  const next=await server.request('POST','/api/invoices/resend-original',{...body,requestId:'4fbe6e39-e211-47f3-9a3c-05fd0332cdaa'});
+  assert.equal(next.status,200);assert.equal(sends,2);assert.notEqual(keys[0],keys[1]);
+  assert.ok(server.calls.every(call=>call.method==='GET'),'must not regenerate or change customer data');
+  assert.equal(results[0].body.sha256,require('node:crypto').createHash('sha256').update(bytes).digest('hex'));
+});
+
+test('resend does not reuse the automatic issuance mail state and cannot change recipient or invoice under the same request ID', async t => {
+  const store=await deliveryFixture(t),digital=require('../digital-invoice');let sends=0;
+  await store.write(digital.keyFor('http://priority.invalid/odata/config/test-only',123),'mail',{status:'complete',result:{email:'old@example.com'}});
+  const server=isolatedServer(resendTransport(Buffer.from('%PDF-1.7 /ByteRange saved')),200,{},store,undefined,{
+    async verify(){},async sendOriginal(){sends++;return {acceptedByMailServer:true};},
+  });
+  const body=resendBody();assert.equal((await server.request('POST','/api/invoices/resend-original',body)).status,200);
+  for (const changed of [{email:'different@example.com'},{ivnum:'IN124'}]) {
+    assert.equal((await server.request('POST','/api/invoices/resend-original',{...body,...changed})).status,400);
+  }
+  assert.equal(sends,1);
+});
+
+test('invalid resend consent, recipient and request ID fail before reading Priority or sending', async () => {
+  const server=isolatedServer(()=>{throw Error('Must not read Priority');});
+  for(const invalid of [{consent:false},{email:'x@example.com\r\nBcc:other@example.com'},{requestId:''},{requestId:'------------------------------------'}]) {
+    assert.equal((await server.request('POST','/api/invoices/resend-original',{...resendBody(),...invalid})).status,400);
+  }
+  assert.equal(server.calls.length,0);
+});
+
+test('resend keeps existing invoice ownership checks and rejects drafts', async t => {
+  const server=isolatedServer(resendTransport(Buffer.from('%PDF- /ByteRange'),{owner:'other'}),200,{},await deliveryFixture(t));
+  for(const method of ['GET','POST']) {
+    const url=method==='GET'?'/api/invoices/resend-options?ivnum=IN123':'/api/invoices/resend-original';
+    assert.equal((await server.request(method,url,method==='POST'?resendBody():undefined)).status,400);
+  }
+  assert.equal((await server.request('POST','/api/invoices/resend-original',{...resendBody(),ivnum:'T123'})).status,400);
+});
+
+test('missing, ambiguous or invalid originals never trigger resend or regeneration', async t => {
+  for(const attachments of [[],[{EXTFILEDES:'מסמך ממוחשב',EXTFILENAME:'invalid'}],
+    [{EXTFILEDES:'מסמך ממוחשב'},{EXTFILEDES:'מסמך ממוחשב'}]]) {
+    let sends=0;
+    const server=isolatedServer(resendTransport(Buffer.from(''),{attachments}),200,{},await deliveryFixture(t),undefined,{
+      async verify(){throw Error('must not verify before original');},async sendOriginal(){sends++;},
+    });
+    assert.notEqual((await server.request('POST','/api/invoices/resend-original',resendBody())).status,200);
+    assert.equal(sends,0);assert.ok(server.calls.every(call=>call.method==='GET'));
+  }
+});
+
+test('uncertain resends and unconfirmed acceptance remain blocked across restart', async t => {
+  for(const response of ['timeout','unconfirmed']) {
+    const store=await deliveryFixture(t);let sends=0;
+    const transport=resendTransport(Buffer.from('%PDF-1.7 /ByteRange original'));
+    const mailer={async verify(){},async sendOriginal(){sends++;if(response==='timeout')throw Error('timeout');return {};}};
+    const first=isolatedServer(transport,200,{},store,undefined,mailer);
+    assert.equal((await first.request('POST','/api/invoices/resend-original',resendBody())).status,500);
+    const restarted=isolatedServer(transport,200,{},store,undefined,mailer);
+    assert.equal((await restarted.request('POST','/api/invoices/resend-original',resendBody())).status,400);
+    assert.equal(sends,1);
+  }
+});
+
+test('agent rows expose document eligibility without exposing the Priority owner login', async () => {
+  const server=isolatedServer(()=>({value:[
+    {AGENTCODE:'90',IVNUM:'IN123',OWNERLOGIN:'fake-user'},
+    {AGENTCODE:'90',IVNUM:'IN124',OWNERLOGIN:'other-user'},
+  ]}));
+  const result=await server.request('GET','/api/invoices/recent?agent=90');
+  assert.deepEqual(result.body.value.map(row=>row.canManageDocuments),[true,false]);
+  assert.ok(result.body.value.every(row=>!('OWNERLOGIN' in row)));
+});
+
+test('agent history pages contain ten rows and use the last visible IV to fetch older records', async () => {
+  let rows=Array.from({length:23},(_,i)=>({IV:200-i,IVNUM:'IN'+(200-i),AGENTCODE:'90',OWNERLOGIN:'fake-user'}));
+  const server=isolatedServer(url=>{
+    const query=new URL(url).searchParams,filter=query.get('$filter');
+    assert.equal(query.get('$orderby'),'IV desc');assert.equal(query.get('$top'),'11');
+    const before=Number(filter.match(/IV lt (\d+)/)?.[1]||Infinity);
+    return {value:rows.filter(row=>row.IV<before).slice(0,11)};
+  });
+  const first=await server.request('GET','/api/invoices/recent?agent=90');
+  assert.equal(first.status,200);assert.equal(first.body.value.length,10);assert.equal(first.body.nextBefore,'191');assert.equal(first.body.hasMore,true);
+  assert.ok(first.body.value.every(row=>!('IV' in row)));
+  // New records arriving at the top must not shift or repeat the older pages.
+  rows.unshift({IV:201,IVNUM:'IN201',AGENTCODE:'90',OWNERLOGIN:'fake-user'});
+  const second=await server.request('GET','/api/invoices/recent?agent=90&before=191');
+  assert.equal(second.body.value.length,10);assert.equal(second.body.value[0].IVNUM,'IN190');assert.equal(second.body.nextBefore,'181');
+  const last=await server.request('GET','/api/invoices/recent?agent=90&before=181');
+  assert.equal(last.body.value.length,3);assert.equal(last.body.hasMore,false);assert.equal(last.body.nextBefore,null);
+  const numbers=[...first.body.value,...second.body.value,...last.body.value].map(row=>row.IVNUM);
+  assert.equal(new Set(numbers).size,23);
+  assert.ok(server.calls.every(call=>call.method==='GET'));
+});
+
+test('history rejects invalid cursors and customer/agent mixtures before contacting Priority', async () => {
+  const server=isolatedServer(()=>{throw Error('Must not query');});
+  for(const query of ['agent=90&before=0','agent=90&before=-1','agent=90&before=1.5',
+    'agent=90&before=1%20or%201%20eq%201','agent=90&before=9007199254740992','before=10',
+    'custname=TEST&before=10','agent=90&custname=TEST&before=10']) {
+    assert.equal((await server.request('GET','/api/invoices/recent?'+query)).status,400,query);
+  }
+  assert.equal(server.calls.length,0);
+});
+
+test('exactly ten or zero remaining rows hide load-more without requiring an empty extra page', async () => {
+  for(const count of [0,10]) {
+    const server=isolatedServer(()=>({value:Array.from({length:count},(_,i)=>({IV:100-i,IVNUM:'IN'+(100-i),AGENTCODE:'90'}))}));
+    const result=await server.request('GET','/api/invoices/recent?agent=90');
+    assert.equal(result.body.value.length,count);assert.equal(result.body.hasMore,false);assert.equal(result.body.nextBefore,null);
+  }
 });

@@ -9,27 +9,31 @@ const { buildInvoicePayload } = require('../invoice-payload');
 
 test('gold rows use a manual shekel price, without requesting a gold quote or FX', async () => {
   const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
-  const rows = [];
+  const rows = [], focused = [];
   const fields = {
-    '.l-part': { value: '14' }, '.l-grams': { value: '2.5', focus() {} },
+    '.l-part': { value: '14', focus(){focused.push('sku');}, select(){} }, '.l-grams': { value: '2.5', focus(){focused.push('quantity');} },
     '.l-price': { value: '123.40' }, '.l-currency': { value: 'ש"ח' },
     '.l-exchange': {}, '.l-discount': { value: '0' }, '.l-unit': {}, '.l-desc': {},
   };
-  const row = { isConnected: true, querySelector: selector => fields[selector] };
+  const row = { dataset: {}, isConnected: true, querySelector: selector => fields[selector] };
   const elements = {
     lines: { querySelector: () => ({ rows, appendChild: tr => rows.push(tr) }) },
     date: { value: '2026-11-10', addEventListener() {} },
     discount: { value: '0' }, useBoiRates: { checked: false, addEventListener() {} },
     invoiceType: { value: '1' },
+    retryExchangeRates: { addEventListener() {} },
   };
   const calls = [];
-  const ctx = { $: id => elements[id], document: { createElement: () => row }, escapeHtml: String,
+  let recalculations = 0;
+  const ctx = { recalc(){recalculations++;}, $: id => elements[id], document: { createElement: () => row }, escapeHtml: String,
     api: async url => { calls.push(url); return { value: [{ PARTNAME: '14', PARTDES: 'Gold', BASEPLPRICE: 76.58, BASEPLCODE: '$' }] }; },
   };
   const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
   vm.runInNewContext(section("const tbody = $('lines')", "$('addLine').addEventListener") +
     section('function readLines()', 'function recalc()') + section('function applyPartPrice(', "tbody.addEventListener('input', e => {\n  const input"), ctx);
   ctx.addLine();
+  assert.equal(recalculations, 1);
+  assert.deepEqual(focused, ['sku']);
   await ctx.loadExchangeRates();
   ctx.applyPartPrice(row, { BASEPLPRICE: 100, BASEPLCODE: 'USD' });
   assert.match(row.innerHTML, /aria-label="מחיר בש״ח לגרם"/);

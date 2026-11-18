@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>צבאן — תצוגת עיצוב</title>
+  <link rel="stylesheet" href="wireframes.css">
+  <link rel="stylesheet" href="apple.css">
+  <script src="wireframes.js" defer></script>
+</head>
+<body>
+  <div class="prototype-label">תצוגת עיצוב · נתוני דמה</div>
+  <header class="app-header">
+    <a href="#start" data-screen="start" class="wordmark">צבאן <span>חשבוניות</span></a>
+    <div class="workspace">סוכן 90 <span class="connection" id="connection">מחובר להדגמה</span></div>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="exitDialog" aria-labelledby="exitTitle">
+    <h2 id="exitTitle">לחזור לחשבוניות?</h2>
+    <p>החשבונית כבר הופקה. החתימה עדיין לא נשמרה.</p>
+    <p class="muted">במסכי המבנה אפשר לבחון השלמה מאוחרת. הזמינות במוצר תלויה בהרשאות ובשמירת מצב התהליך.</p>
+    <div class="dialog-actions"><button class="primary" data-action="stay-signing">חזרה לחתימה</button><button data-action="leave-signing">הצגת חשבונית ממתינה</button></div>
+  </dialog>
+</body>
+</html>

@@ -1,34 +1,34 @@
-Zaban Invoice Server - Portable Windows x64
-==========================================
+Zaban Invoice - complete portable deployment (Windows x64)
+=========================================================
+Read START-HERE.he.md for detailed Hebrew instructions.
 
-1. Extract ALL files from the ZIP to a new folder on the server.
-   Do not run start-server.bat from inside the ZIP.
-2. A configured package already contains .env. Otherwise copy your existing
-   .env into this folder, or copy .env.example to .env and fill in the settings.
-3. Double-click start-server.bat. Keep its CMD window open.
-4. On the server open http://localhost:18473
-   On another authorized computer open http://SERVER-IP:18473
-5. Close the CMD window or press Ctrl+C to stop the server.
+1. Stop the old invoice server and back up its entire folder.
+2. Extract ALL ZIP files into a NEW folder. Do not run inside the ZIP.
+3. For an existing server, copy its .env AND entire data folder into the
+   new folder before starting. Preserve server settings over bundled settings.
+4. Run start-server.bat and keep its CMD window open.
+5. Open http://localhost:18473/?agent=90 on the server, or use SERVER-IP
+   from the agent's phone/tablet. Change agent=90 to the agent's number.
 
-Node.js is bundled in runtime/node.exe. All dependencies are in node_modules.
-No Node.js/npm installation, administrator setup, service or PATH change is needed.
-The launcher runs the server directly in the visible CMD window.
+Node.js and all production dependencies are bundled. No installer, npm,
+service registration or PATH changes are needed on the destination server.
+The server needs its existing network access to Priority, rates and mail.
 
-UPDATING AN EXISTING SERVER:
-Close its old server window first. Extract this release into a NEW folder,
-copy the server's existing .env there to preserve its connection settings,
-and copy its entire data folder (including originals and delivery) into the
-new folder BEFORE starting. These records prevent duplicate originals,
-emails and signed attachments. Do not replace server data with test data
-from another computer. Then run start-server.bat. Keep the old folder
-for rollback.
-No change to the existing firewall rules is required for the same port.
-The server still needs network access to Priority and Bank of Israel.
+DATA: This release does not include source-machine data or live invoices.
+Always retain the destination server's entire data folder. It holds original
+PDFs and operation records that prevent duplicate generation and email.
+Never run two independent data stores for the same invoice operations.
+Keep the old application folder for rollback.
 
-This Windows x64 runtime requires Windows 10 / Windows Server 2016 or newer.
-https://github.com/nodejs/node/blob/v24.15.0/BUILDING.md#platform-list
-The runtime distribution license is in runtime/LICENSE.txt.
-Dependency licenses remain in their node_modules package folders.
+CONFIG: Configured bundles contain .env with private connection credentials.
+Keep the ZIP private. Unconfigured bundles have .env.example instead.
+For a new server, review the bundled settings before starting.
 
-A configured ZIP contains Priority connection credentials in .env.
-Keep it private, and do not upload it to Git or share it publicly.
+CURRENT FLOW: Issue and close -> save original in Priority -> optional email
+-> customer signs a copy -> saved signature confirmation.
+The original PDF is NEVER downloaded automatically. Download it only by
+clicking the explicit original-download button at the end or in invoice actions.
+
+CONTENTS: application and public assets, Hebrew font, locked dependencies,
+Node runtime and license, tests, scripts, Priority procedures and n8n workflows.
+PACKAGE-SHA256.txt lists file hashes; build-info.json records build metadata.

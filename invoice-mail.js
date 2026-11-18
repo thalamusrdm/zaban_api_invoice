@@ -3,6 +3,7 @@ const { emailAddress } = require('./digital-invoice');
 
 // A separate transport sends saved original bytes, never runs Priority printing.
 function createMailer(env = process.env, createTransport = options => require('nodemailer').createTransport(options)) {
+  if (env.N8N_INVOICE_MAIL_URL || env.N8N_INVOICE_MAIL_KEY) return require('./n8n-mail').createN8nMailer(env);
   let transport;
   function configuration() {
     const required = ['SMTP_HOST', 'SMTP_FROM', 'SMTP_USER'];

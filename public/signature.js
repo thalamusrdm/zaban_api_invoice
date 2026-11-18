@@ -5,7 +5,14 @@ let signingState=null,signatureLoad=0,signatureDrawing=false,signaturePoints=0;
 const emailPending=new Set();
 const signatureCanvas=document.getElementById('signatureCanvas');
 const signatureContext=signatureCanvas.getContext('2d');
-function clearInvoiceSignature(){signatureContext.fillStyle='white';signatureContext.fillRect(0,0,signatureCanvas.width,signatureCanvas.height);signaturePoints=0;signatureDrawing=false;}
+function fitInvoiceSignatureCanvas(){
+  const bounds=signatureCanvas.getBoundingClientRect();
+  if(bounds.width>0 && bounds.height>0){
+    const height=Math.max(1,Math.round(signatureCanvas.width*bounds.height/bounds.width));
+    if(signatureCanvas.height!==height)signatureCanvas.height=height;
+  }
+}
+function clearInvoiceSignature(){fitInvoiceSignatureCanvas();signatureContext.fillStyle='white';signatureContext.fillRect(0,0,signatureCanvas.width,signatureCanvas.height);signaturePoints=0;signatureDrawing=false;}
 function updateSignatureButton(){
   const state=signingState;
   const pending=state && emailPending.has(state.ivnum);
@@ -19,6 +26,7 @@ function updateSignatureButton(){
 }
 async function openInvoiceForSigning(ivnum){
   const request=++signatureLoad;
+  document.getElementById('signatureStatus').removeAttribute('data-state');
   const dialog=document.getElementById('signatureDialog');
   const waitingForCopy=typeof InvoiceProgress!=='undefined' && InvoiceProgress.isOpen();
   if(waitingForCopy)InvoiceProgress.update('signature');
@@ -55,27 +63,26 @@ async function openInvoiceForSigning(ivnum){
 async function finishOriginalDownload(data){
   if(typeof InvoiceProgress!=='undefined')InvoiceProgress.update('original');
   const notice=document.getElementById('documentMsg');
-  notice.className='msg show';notice.textContent='מכין את מקור החשבונית '+data.ivnum+' לשמירה בנספחים ולהורדה…';
+  notice.className='msg show';notice.textContent='שומר את מקור החשבונית '+data.ivnum+' בנספחים בפריוריטי…';
   try{
     await api('/api/invoices/prepare-original-download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ivnum:data.ivnum})});
-    // A browser download failure must not prevent mailing the saved attachment.
-    const downloaded = await downloadInvoice(data.ivnum,null,'original');
+    const readyNotice='המקור של חשבונית '+data.ivnum+' נשמר בפריוריטי. ניתן להוריד אותו בסיום בלחיצה על ״הורדת מקור״.';
+    notice.className='msg show ok';notice.textContent=readyNotice;
     if(data.sendOriginalEmail){
-      const downloadNotice = notice.textContent;
-      notice.textContent = 'מעביר את מקור החשבונית '+data.ivnum+' למייל '+data.email+'…';
+      notice.textContent='מעביר את מקור החשבונית '+data.ivnum+' למייל '+data.email+'…';
       try{
         const result=await api('/api/invoices/email-original',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ivnum:data.ivnum,email:data.email})});
         if(!result.acceptedByMailServer)throw Error('שרת הדואר לא אישר את בקשת השליחה');
-        notice.className='msg show '+(downloaded?'ok':'warn');
-        notice.textContent=downloadNotice+' שרת הדואר קיבל את המקור לשליחה אל '+result.email+'. זה אינו אישור מסירה לתיבת הלקוח.';
+        notice.className='msg show ok';
+        notice.textContent=readyNotice+' שרת הדואר קיבל את המקור לשליחה אל '+result.email+'. זה אינו אישור מסירה לתיבת הלקוח.';
       }catch(e){
         notice.className='msg show warn';
-        notice.textContent=downloadNotice+' משלוח המקור במייל לא אומת: '+e.message+' אין להפיק חשבונית נוספת.';
+        notice.textContent=readyNotice+' משלוח המקור במייל לא אומת: '+e.message+' אין להפיק חשבונית נוספת.';
       }
     }
   }catch(e){
     notice.className='msg show warn';notice.textContent='החשבונית '+data.ivnum+' סופית, אך הכנת המקור לא אומתה: '+e.message+'. אין להפיק חשבונית נוספת. לא נשלח מייל. ';
-    const retry=document.createElement('button');retry.type='button';retry.className='close-btn prepare-original-btn';retry.dataset.iv=data.ivnum;retry.dataset.email=data.email||'';retry.dataset.sendOriginalEmail=String(!!data.sendOriginalEmail);retry.textContent='בדיקת המקור הקיים והמשך הורדה';notice.appendChild(retry);
+    const retry=document.createElement('button');retry.type='button';retry.className='close-btn prepare-original-btn';retry.dataset.iv=data.ivnum;retry.dataset.email=data.email||'';retry.dataset.sendOriginalEmail=String(!!data.sendOriginalEmail);retry.textContent='בדיקת המקור הקיים והמשך לחתימה';notice.appendChild(retry);
   }finally{await openInvoiceForSigning(data.ivnum);}
 }
 async function finishDigitalInvoice(data){
@@ -90,7 +97,7 @@ async function finishDigitalInvoice(data){
   finally{emailPending.delete(data.ivnum);await openInvoiceForSigning(data.ivnum);updateSignatureButton();}
 }
 function signaturePosition(event){const r=signatureCanvas.getBoundingClientRect();return {x:(event.clientX-r.left)*signatureCanvas.width/r.width,y:(event.clientY-r.top)*signatureCanvas.height/r.height};}
-signatureCanvas.addEventListener('pointerdown',e=>{if(!signingState || signingState.saving || signingState.saved)return;e.preventDefault();signatureCanvas.setPointerCapture(e.pointerId);const p=signaturePosition(e);signatureContext.beginPath();signatureContext.moveTo(p.x,p.y);signatureContext.strokeStyle='#172033';signatureContext.lineWidth=2.5;signatureContext.lineCap='round';signatureDrawing=true;});
+signatureCanvas.addEventListener('pointerdown',e=>{if(!signingState || signingState.saving || signingState.saved)return;if(signaturePoints===0)clearInvoiceSignature();e.preventDefault();signatureCanvas.setPointerCapture(e.pointerId);const p=signaturePosition(e);signatureContext.beginPath();signatureContext.moveTo(p.x,p.y);signatureContext.strokeStyle='#172033';signatureContext.lineWidth=2.5;signatureContext.lineCap='round';signatureDrawing=true;});
 signatureCanvas.addEventListener('pointermove',e=>{if(!signatureDrawing)return;e.preventDefault();const p=signaturePosition(e);signatureContext.lineTo(p.x,p.y);signatureContext.stroke();signaturePoints++;});
 for(const event of ['pointerup','pointercancel'])signatureCanvas.addEventListener(event,()=>{signatureDrawing=false;});
 document.getElementById('clearSignature').addEventListener('click',()=>{if(!signingState?.saving && !signingState?.saved)clearInvoiceSignature();});
@@ -107,7 +114,8 @@ document.getElementById('closeSignature').addEventListener('click',()=>{
 document.getElementById('saveSignature').addEventListener('click',async()=>{
   const state=signingState;if(!state || state.saving || state.saved)return;
   const signer=document.getElementById('signatureName').value.trim();const status=document.getElementById('signatureStatus');
-  if(!signer){status.textContent='יש להזין את שם החותם';return;}if(signaturePoints<2){status.textContent='יש לחתום על המסך לפני השמירה';return;}
+  if(!signer){status.setAttribute('data-state','error');status.textContent='יש להזין את שם החותם';return;}if(signaturePoints<2){status.setAttribute('data-state','error');status.textContent='יש לחתום על המסך לפני השמירה';return;}
+  status.removeAttribute('data-state');
   state.saving=true;updateSignatureButton();status.textContent='שומר את ההעתק החתום בנספחי החשבונית '+state.ivnum+'…';
   try{
     const result=await api('/api/invoices/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ivnum:state.ivnum,token:state.token,signer,signature:signatureCanvas.toDataURL('image/png')})});
@@ -118,7 +126,7 @@ document.getElementById('saveSignature').addEventListener('click',async()=>{
       document.getElementById('saveSignature').disabled=true;
       if(typeof completeSignatureFlow==='function')completeSignatureFlow(result.ivnum);
     }
-  }catch(e){if(signingState===state)status.textContent='שמירת החתימה לא אומתה: '+e.message+'. החתימה נשארה על המסך; אין להפיק חשבונית נוספת.';}
+  }catch(e){if(signingState===state){status.setAttribute('data-state','error');status.textContent='שמירת החתימה לא אומתה: '+e.message+'. החתימה נשארה על המסך; אין להפיק חשבונית נוספת.';}}
   finally{state.saving=false;if(signingState===state)updateSignatureButton();}
 });
 clearInvoiceSignature();

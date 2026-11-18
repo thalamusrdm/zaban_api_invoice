@@ -168,14 +168,16 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="workspace-title"><span class="workspace-caption">Priority · סביבת עבודה</span><h1>הפקת חשבונית מס</h1></div>
-    <span id="env"><span id="envText">בודק חיבור…</span><span class="dot"></span></span>
+    <div class="workspace-title"><h1>צבאן <span>חשבוניות</span></h1></div>
+    <span id="env"><span id="envText">בודק חיבור…</span><span class="dot"></span><span id="envAgent"></span></span>
   </header>
 
   <section class="type-picker" id="typePicker" aria-labelledby="typePickerTitle">
     <div id="completionNotice" class="completion-notice" role="status" aria-live="polite" hidden>
       <h3 id="completionTitle" tabindex="-1">תודה! החתימה נשמרה</h3>
       <p id="completionDetails"></p>
+      <button type="button" id="completionOriginal" class="close-btn dl-btn" data-kind="original" hidden>הורדת מקור</button>
+      <div id="completionDocumentStatus" class="msg" role="status" aria-live="polite" tabindex="-1"></div>
     </div>
     <h2 id="typePickerTitle" tabindex="-1">איזו חשבונית להפיק?</h2>
     <p>בוחרים סוג, מוסיפים לקוח ומוצרים, ומפיקים.</p>
@@ -186,11 +188,11 @@
       </button>
       <button type="button" class="type-choice" data-type="2" style="--choice-color:#47798d">
         <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 15l8-9h16l8 9-16 20zM4 15h32M12 6l8 29 8-29M12 15l8-9 8 9"/></svg>
-        <strong>יהלומים</strong><span class="choice-next">פתיחת חשבונית יהלומים ←</span>
+        <strong>יהלומים טבעיים</strong><span class="choice-next">פתיחת חשבונית יהלומים טבעיים ←</span>
       </button>
       <button type="button" class="type-choice" data-type="4" style="--choice-color:#687d60">
         <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="26" r="10"/><path d="M13 9l4-5h6l4 5-7 9zM13 9h14M17 4l3 14 3-14"/></svg>
-        <strong>תכשיטים בשיבוץ יהלומי מעבדה</strong><span class="choice-next">פתיחת חשבונית תכשיטים ←</span>
+        <strong>יהלומי מעבדה</strong><span class="choice-next">פתיחת חשבונית יהלומי מעבדה ←</span>
       </button>
     </div>
     <section class="recent-section agent-recent" aria-labelledby="agentRecentTitle">
@@ -199,15 +201,16 @@
         <button type="button" class="refresh" id="agentRefreshBtn" disabled>רענון</button>
       </div>
       <p class="field-note" id="agentRecentHint"></p>
+      <p id="agentDocumentStatus" class="msg" role="status" aria-live="polite"></p>
       <div id="agentRecentBody" aria-live="polite"></div>
+      <div class="agent-recent-pagination">
+        <p id="agentMoreStatus" class="field-note" role="status" hidden></p>
+        <button type="button" class="refresh" id="agentLoadMoreBtn" hidden>טען עוד 10 חשבוניות</button>
+      </div>
     </section>
   </section>
 
   <section id="invoiceScreen" hidden aria-labelledby="selectedTypeTitle">
-  <div class="invoice-heading">
-    <div><h2 id="selectedTypeTitle" tabindex="-1"></h2></div>
-    <button type="button" class="mini-btn" id="changeType">החלפת סוג חשבונית</button>
-  </div>
   <form class="card" id="form" autocomplete="off">
     <nav class="flow-steps" aria-label="שלבי הפקת חשבונית">
       <button type="button" data-step="0" aria-current="step"><span>1</span>לקוח</button>
@@ -215,15 +218,21 @@
       <button type="button" data-step="2"><span>3</span>בדיקה והפקה</button>
       <button type="button" data-step="3" disabled><span>4</span>חתימת לקוח</button>
     </nav>
+  <div class="invoice-heading">
+    <div><h2 id="selectedTypeTitle" tabindex="-1"></h2></div>
+    <button type="button" class="mini-btn" id="changeType">החלפת סוג חשבונית</button>
+  </div>
+
     <section class="flow-panel" id="customerStep" aria-labelledby="customerStepTitle">
     <h2 id="customerStepTitle" tabindex="-1">למי החשבונית?</h2>
-    <p class="step-intro">בחרו לקוח ותאריך כדי להתחיל.</p>
-    <div class="grid">
+    <p class="step-intro">בוחרים לקוח ומאמתים את פרטי הקשר.</p>
+    <div class="customer-layout"><div class="customer-content">
       <div class="cust">
-        <label for="custSearch">לקוח (שם או מספר)</label>
+        <div class="customer-selection" id="customerSelection" hidden><div><strong id="selectedCustomerName"></strong><span id="selectedCustomerNumber"></span></div><button type="button" id="changeCustomer">החלפה</button></div>
+        <div id="customerSearchGroup"><label for="custSearch">לקוח (שם או מספר)</label>
         <input id="custSearch" placeholder="שם או מספר לקוח (לפחות 2 תווים)…" required>
         <div class="cust-list" id="custList" hidden></div>
-        <div id="custChosen"></div>
+        </div><div id="custChosen" class="visually-hidden" aria-live="polite"></div>
         <input type="hidden" id="custname">
         <div id="customerDelivery" hidden>
           <label for="customerEmail">מייל לקבלת חשבוניות</label>
@@ -233,11 +242,10 @@
           <input id="customerPhone" type="tel" inputmode="tel" dir="ltr" maxlength="64" autocomplete="tel"
                  disabled aria-describedby="customerDeliveryNote customerDeliveryStatus">
           <p class="field-note" id="customerDeliveryNote">במעבר למוצרים נשמור את המייל ושינויים בטלפון בכרטיס הלקוח בפריוריטי ונסמן בו ״מקבל מסמך ממוחשב״.</p>
-          <p class="field-note" id="customerDeliveryStatus" role="status"></p>
-          <label class="checkbox-label"><input id="sendOriginalEmail" type="checkbox" disabled aria-describedby="originalMailStatus"> לשלוח את המקור גם למייל של הלקוח</label>
-          <p class="field-note" id="originalMailStatus" role="status">בודק זמינות משלוח במייל…</p>
+          <p class="field-note" id="customerDeliveryStatus" tabindex="-1" role="status"></p>
+
         </div>
-        <div id="custInfo">
+        <details id="custInfo"><summary>פרטי חברה ומוכנות להפקה</summary>
           <h4><span>פרטי לקוח ומספר הקצאה</span><button type="button" class="mini-btn" id="custEditBtn">עריכה</button></h4>
           <div class="rows" id="custRows"></div>
           <div id="custAlloc"></div>
@@ -253,7 +261,7 @@
                 <option value="5">5 – חברה בינ"ל</option>
                 <option value="9">9 – תושב חוץ</option>
               </select></div>
-            <div><label for="e_VATNUM">מספר תיק במע"מ</label><input id="e_VATNUM" inputmode="numeric" maxlength="9" placeholder="בד"כ זהה למס' החברה"></div>
+            <div><label for="e_VATNUM">מספר תיק במע"מ</label><input id="e_VATNUM" inputmode="numeric" maxlength="9" placeholder="בד&quot;כ זהה למס' החברה"></div>
             <div><label for="e_BUSINESSTYPE">תחום עיסוק</label><input id="e_BUSINESSTYPE"></div>
             <div class="actions">
               <button type="button" id="custSaveBtn" style="background:var(--accent);color:#fff;border-color:var(--accent)">שמירה בפריוריטי</button>
@@ -261,23 +269,17 @@
               <span id="custSaveMsg" style="font-size:12.5px"></span>
             </div>
           </div>
-        </div>
+        </details>
       </div>
-      <div>
-        <label for="date">תאריך חשבונית</label>
-        <input type="date" id="date" required>
-      </div>
-    </div>
-    <div style="margin-top:14px">
+<details class="optional-fields invoice-extra" id="invoiceExtra"><summary>תאריך ופרטי חשבונית נוספים</summary><div><label for="date">תאריך חשבונית</label><input type="date" id="date" required></div>    <div style="margin-top:14px">
       <label for="details">מזהה הזמנה או פרטים</label>
       <input id="details" maxlength="24" placeholder='למשל: הזמנה 1234'>
       <p class="field-note">מומלץ למלא כדי למנוע חשבונית כפולה.</p>
     </div>
-    <details class="optional-fields">
-    <summary>פרטים נוספים <span>סוכן, מחסן וחשבונית פנקס</span></summary>
+
     <div class="invoice-fields">
       <div hidden><label for="invoiceType">סוג חשבונית</label><select id="invoiceType" required>
-        <option value="1">זהב</option><option value="2">יהלומים</option><option value="4">תכשיטים בשיבוץ יהלומי מעבדה</option>
+        <option value="1">זהב</option><option value="2">יהלומים טבעיים</option><option value="4">יהלומי מעבדה</option>
       </select></div>
       <div><label for="agent">סוכן</label><input id="agent" inputmode="numeric" maxlength="16" list="agentOptions" placeholder="לפי הגדרת הלקוח בפריוריטי" aria-describedby="agentSource"><datalist id="agentOptions"></datalist><p class="field-note" id="agentSource">אפשר לקבוע סוכן בכתובת באמצעות ‎?agent=40</p></div>
       <div><label for="warehouse">מחסן שולח</label><input id="warehouse" inputmode="numeric" maxlength="4" list="warehouseOptions" value="1" placeholder="ברירת המחדל בפריוריטי"><datalist id="warehouseOptions"></datalist></div>
@@ -285,30 +287,47 @@
       <div><label for="booknum">חשבונית פנקס</label><input id="booknum" maxlength="48" placeholder="לא חובה"></div>
     </div>
     <p class="field-note" id="optionsStatus" role="status">טוען הצעות למחסנים ולסוכנים…</p>
-    </details>
+</details>
+</div><aside class="invoice-summary" aria-label="תקציר החשבונית"><h3>החשבונית בקצרה</h3><strong data-summary="customer">לא נבחר לקוח</strong><p class="summary-customer-number" data-summary="number"></p><dl class="summary-facts"><div><dt>סוג</dt><dd data-summary="type">זהב</dd></div><div><dt>תאריך</dt><dd data-summary="date"></dd></div><div><dt>סוכן / מחסן</dt><dd data-summary="agent"></dd></div></dl><dl class="summary-money"><div><dt>לפני מע״מ</dt><dd data-summary="before">0.00 ₪</dd></div><div><dt>מע״מ 18%</dt><dd data-summary="vat">0.00 ₪</dd></div><div class="summary-grand"><dt>סה״כ</dt><dd data-summary="total">0.00 ₪</dd></div></dl><p class="field-note">סכומים לתצוגה מקדימה.<br>הסכום הסופי ייקבע בפריוריטי.</p></aside></div>
     </section>
     <section class="flow-panel" id="productsStep" aria-labelledby="productsStepTitle" data-gold hidden>
     <h2 id="productsStepTitle" tabindex="-1">מה מוסיפים לחשבונית?</h2>
     <p class="step-intro" id="pricingIntro">בחרו מוצר והזינו כמות בגרמים ומחיר בש״ח לגרם.</p>
+    <div class="cart-discount cart-discount-top">
+      <div><label for="discount">הנחה על כל המוצרים (%)</label><p id="discountNote" class="field-note">מעדכנת את כל השורות הקיימות והחדשות. אפשר לשנות הנחה לפריט בודד לאחר מכן.</p></div>
+      <input id="discount" type="number" inputmode="decimal" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote">
+    </div>
+    <section class="cart-exchange pricing-exchange" aria-label="שער הדולר לחשבונית">
+      <div class="cart-exchange-heading"><span>שער דולר משותף לכל המוצרים</span><details><summary>מקור השער</summary><label class="checkbox-label"><input type="checkbox" id="useBoiRates" checked autocomplete="off">שער דולר מבנק ישראל</label><p class="field-note" id="exchangeSourceNote"></p></details></div>
+      <p class="field-note" id="exchangeStatus" role="status"></p>
+      <button type="button" class="ghost" id="retryExchangeRates" hidden>ניסיון נוסף לטעינת שער הדולר</button>
+    </section>
+    <div class="cart-workspace"><div class="cart-content">
+      <div class="cart-list-heading"><h3>המוצרים בחשבונית</h3><span id="cartLineCount"></span></div>
     <div class="table-scroll" role="region" aria-label="שורות החשבונית" tabindex="0">
     <table id="lines">
-      <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col" id="priceHeading">מחיר בש״ח לגרם</th><th scope="col" hidden>מטבע מחיר</th><th scope="col" class="pricing-exchange">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סה״כ (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
+      <thead><tr><th scope="col">מק״ט / מוצר</th><th scope="col">כמות</th><th scope="col" id="priceHeading">מחיר בש״ח לגרם</th><th scope="col" hidden>מטבע מחיר</th><th scope="col" class="pricing-exchange">שער לש״ח</th><th scope="col">הנחה (%)</th><th scope="col">סכום פריט (₪)</th><th scope="col"><span aria-label="מחיקה">×</span></th></tr></thead>
       <tbody></tbody>
     </table>
     </div>
-    <button type="button" class="addline" id="addLine">+ הוספת שורה</button>
-    <details class="optional-fields">
-      <summary>הנחות<span class="pricing-exchange"> ושער דולר</span></summary>
-      <div class="pricing-settings">
-        <div><label for="discount">הנחה לשורות (%)</label><input id="discount" type="number" inputmode="decimal" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote"><p class="field-note" id="discountNote">חלה על שורות חדשות ושורות שלא שיניתם בהן הנחה. אין הנחה נוספת על הסכום הכולל.</p></div>
-        <div class="pricing-exchange"><label class="checkbox-label"><input type="checkbox" id="useBoiRates" checked autocomplete="off">שער דולר מבנק ישראל</label><p class="field-note" id="exchangeSourceNote"></p><p class="field-note" id="exchangeStatus" role="status"></p></div>
-      </div>
-      <p class="field-note" id="selectedTypeNote"></p>
-    </details>
-    <dl class="products-summary" aria-label="סיכום המוצרים" aria-live="polite" aria-atomic="true">
-      <div><dt>סה״כ כמות</dt><dd id="productsQuantity">0 גרם</dd></div>
-      <div><dt>סה״כ לפני מע״מ, אחרי הנחות</dt><dd id="productsAmount">0.00 ₪</dd></div>
-    </dl>
+    <div class="cart-add-actions">
+      <button type="button" class="addline" id="addLine">+ הוספת מוצר</button>
+      <button type="button" class="scan-product" id="scanProduct" aria-label="סריקת ברקוד במצלמה" title="סריקת ברקוד או QR">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9V3h6M15 3h6v6M21 15v6h-6M9 21H3v-6M7 7h3v3H7zM14 7h3v3h-3zM7 14h3v3H7zM14 14h3v3h3M14 20v-3"/></svg>
+        <span>סריקה</span>
+      </button>
+    </div>
+    <div class="cart-discount cart-discount-bottom">
+      <div><label for="discountBottom">הנחה על כל המוצרים (%)</label><p class="field-note">אותה הנחה שמופיעה למעלה, ללא הנחה כפולה.</p></div>
+      <input id="discountBottom" type="number" inputmode="decimal" min="0" max="100" step="0.01" value="0" aria-describedby="discountNote">
+    </div>
+    <section class="cart-total" aria-label="סיכום החשבונית">
+      <h3>סיכום החשבונית</h3>
+      <dl class="products-summary" aria-label="סיכום המוצרים" aria-live="polite" aria-atomic="true"><div><dt>סה״כ כמות</dt><dd id="productsQuantity">0 גרם</dd></div><div><dt>לפני מע״מ, אחרי הנחות</dt><dd id="productsAmount">0.00 ₪</dd></div><div><dt>מע״מ 18%</dt><dd data-summary="vat">0.00 ₪</dd></div><div class="cart-grand"><dt>סה״כ לתשלום</dt><dd data-summary="total">0.00 ₪</dd></div></dl>
+    </section>
+    <p class="field-note" id="selectedTypeNote"></p>
+    </div><aside class="invoice-summary" aria-label="תקציר החשבונית"><h3>החשבונית בקצרה</h3><strong data-summary="customer">לא נבחר לקוח</strong><p class="summary-customer-number" data-summary="number"></p><dl class="summary-facts"><div><dt>סוג</dt><dd data-summary="type">זהב</dd></div><div><dt>תאריך</dt><dd data-summary="date"></dd></div><div><dt>סוכן / מחסן</dt><dd data-summary="agent"></dd></div></dl>
+   <dl class="summary-money"><div><dt>לפני מע״מ</dt><dd data-summary="before">0.00 ₪</dd></div><div><dt>מע״מ 18%</dt><dd data-summary="vat">0.00 ₪</dd></div><div class="summary-grand"><dt>סה״כ</dt><dd data-summary="total">0.00 ₪</dd></div></dl><p class="field-note">סכומים לתצוגה מקדימה.<br>הסכום הסופי ייקבע בפריוריטי.</p></aside></div>
     </section>
     <section class="flow-panel" id="reviewStep" aria-labelledby="reviewStepTitle" hidden>
     <h2 id="reviewStepTitle" tabindex="-1">בודקים ומפיקים</h2>
@@ -322,30 +341,35 @@
     </div>
 
     <section class="download-note" aria-label="הורדת מקור החשבונית">
-      <p>המקור יישמר בפריוריטי וירד למכשיר. אחריו ייפתח העתק לחתימת הלקוח. ללא משלוח מייל.</p>
+      <h3>מקור החשבונית</h3>
+      <label class="checkbox-label"><input id="sendOriginalEmail" type="checkbox" disabled aria-describedby="originalMailStatus"> לשלוח את המקור גם למייל של הלקוח</label>
+          <p class="field-note" id="originalMailStatus" role="status">בודק זמינות משלוח במייל…</p>
+      <p id="reviewDeliveryNote">המקור יישמר בפריוריטי, ונמשיך לחתימת הלקוח. הורדת המקור זמינה בסיום בלחיצה בלבד.</p>
       <p id="digitalStatus" class="field-note" role="status">יש לבחור לקוח לבדיקת הגדרת מסמך ממוחשב בפריוריטי.</p>
     </section>
     <div class="actions">
-      <button type="submit" id="submit">הפקה, סגירה והורדת מקור</button>
       <span class="final-warning">תופק חשבונית סופית (IN). הסגירה אינה ניתנת לביטול.<br>הסכום הקובע הוא בפריוריטי.</span>
     </div>
     </section>
     <section id="signatureDialog" class="flow-panel signature-step" aria-labelledby="signatureTitle" hidden>
       <h2 id="signatureTitle" tabindex="-1">חתימת לקוח</h2>
       <p class="step-intro">עיינו בהעתק, הזינו שם וחתמו. המסמך החתום יישמר בנספחי אותה חשבונית בפריוריטי.</p>
-      <iframe id="signaturePdf" title="העתק החשבונית לחתימת הלקוח"></iframe>
+      <div class="signature-workspace">
+      <div class="signature-document"><iframe id="signaturePdf" title="העתק החשבונית לחתימת הלקוח"></iframe>
       <p><a id="signatureCopyLink" target="_blank" rel="noopener">פתיחת ההעתק בחלון נפרד</a></p>
+      </div><div class="signature-entry">
       <label for="signatureName">שם החותם</label><input id="signatureName" maxlength="80" autocomplete="name">
       <label for="signatureCanvas" class="signature-label">חתימת הלקוח על המסך</label>
       <canvas id="signatureCanvas" width="640" height="180" aria-label="אזור חתימת הלקוח"></canvas>
-      <div class="signature-actions"><button type="button" id="clearSignature">ניקוי חתימה</button><button type="button" id="saveSignature" disabled>שמירת המסמך החתום בנספחים</button></div>
-      <p id="signatureStatus" role="status" aria-live="polite"></p>
+      <div class="signature-actions"><button type="button" id="clearSignature">ניקוי חתימה</button></div>
+      <p id="signatureStatus" tabindex="-1" role="status" aria-live="polite"></p>
+      </div></div>
       <button type="button" id="closeSignature" class="signature-finish">חשבונית נוספת</button>
     </section>
-    <p id="stepStatus" class="step-error" role="alert" hidden></p>
-    <div class="flow-actions"><button type="button" id="previousStep" hidden>חזרה</button><span id="stepCount" aria-live="polite">שלב 1 מתוך 4</span><button type="button" id="nextStep">המשך למוצרים</button></div>
-    <div class="msg" id="msg"></div>
-    <div class="msg" id="documentMsg" role="status" aria-live="polite"></div>
+    <p id="stepStatus" tabindex="-1" class="step-error" role="alert" hidden></p>
+    <div class="flow-actions"><button type="button" id="previousStep" hidden>חזרה</button><div class="footer-context"><span id="stepCount" aria-live="polite">שלב 1 מתוך 4</span><span id="footerAmount"></span></div><button type="button" id="nextStep">המשך למוצרים</button><button type="submit" id="submit" hidden>הפקה והמשך לחתימה</button><button type="button" id="saveSignature" hidden disabled>שמירת המסמך החתום בנספחים</button></div>
+    <div class="msg" id="msg" role="status" aria-live="polite" tabindex="-1"></div>
+    <div class="msg" id="documentMsg" tabindex="-1" role="status" aria-live="polite"></div>
   </form>
 
   <details class="card recent-section" id="recent">
@@ -356,6 +380,8 @@
   </section>
 </div>
 
+<script src="/part-lookup.js"></script>
+<script src="/customer-tax.js"></script>
 <script src="/invoice-calculations.js"></script>
 <dialog id="invoiceProgressDialog" class="invoice-progress" aria-labelledby="invoiceProgressTitle" aria-describedby="invoiceProgressHint" dir="rtl">
   <svg class="progress-spinner" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 4a12 12 0 0 1 12 12"/></svg>
@@ -364,7 +390,7 @@
   <ol class="progress-stages" aria-label="התקדמות ההפקה">
     <li data-progress="creating">יצירת החשבונית</li>
     <li data-progress="closing">סגירה לחשבונית סופית</li>
-    <li data-progress="original">הכנת המקור להורדה</li>
+    <li data-progress="original">שמירת המקור בפריוריטי</li>
     <li data-progress="signature">הכנת ההעתק לחתימה</li>
   </ol>
   <p id="invoiceProgressHint">נא להמתין לסיום. אין צורך ללחוץ שוב או לרענן את העמוד.</p>
@@ -519,7 +545,9 @@ function renderCustDetails(d) {
   custDetails = d;
   const info = $('custInfo');
   if (!d) { info.classList.remove('show'); return; }
-  const expl = d.WTAXNUMEXPL ? `${d.WTAXNUMEXPL} – ${EXPL_NAMES[d.WTAXNUMEXPL] || ''}` : '';
+  const taxExplanation = CustomerTax.infer(d);
+  const expl = d.WTAXNUMEXPL ? `${d.WTAXNUMEXPL} – ${EXPL_NAMES[d.WTAXNUMEXPL] || ''}`
+    : taxExplanation ? `${taxExplanation.value} – ${taxExplanation.label} (יישמר אוטומטית במעבר למוצרים)` : '';
   $('custRows').innerHTML =
     `<span class="k">מס' חברה / ת.ז</span><span class="num-ltr">${custVal(d.WTAXNUM)}</span>` +
     `<span class="k">הסבר המס'</span><span>${custVal(expl)}</span>` +
@@ -530,13 +558,16 @@ function renderCustDetails(d) {
     (d.EDEA_CONSIGWARHSNAME ? `<span class="k">מחסן קונסיגנציה</span><span>${d.EDEA_CONSIGWARHSNAME} – ${d.EDEA_CONSIGWARHSDES || ''}</span>` : '');
   const missing = [];
   if (!d.WTAXNUM) missing.push("מס' חברה");
-  if (!d.WTAXNUMEXPL) missing.push("הסבר המס'");
+  if (!d.WTAXNUMEXPL && !taxExplanation) missing.push("הסבר המס'");
   if (!d.VATNUM) missing.push('תיק מע"מ');
   $('custAlloc').innerHTML = missing.length
     ? `<div class="alloc-warn">⚠️ חסר: ${missing.join(', ')} — נדרש לקבלת מספר הקצאה (חשבוניות ישראל). אפשר להשלים כאן בלחיצה על "עריכה".</div>`
-    : `<div class="alloc-ok">✓ נתוני החברה מלאים — מתאים לחשבוניות ישראל</div>`;
+    : taxExplanation
+      ? `<div class="alloc-ok">הסבר המספר יושלם בפריוריטי במעבר למוצרים, ללא צורך בעריכה.</div>`
+      : `<div class="alloc-ok">✓ נתוני החברה מלאים — מתאים לחשבוניות ישראל</div>`;
   $('custEdit').classList.remove('show');
   info.classList.add('show');
+  info.open = missing.length > 0;
 }
 
 let digitalCustomerRequest = 0;
@@ -548,9 +579,9 @@ api('/api/mail/status').then(status => {
   $('sendOriginalEmail').checked = status.configured;
   $('originalMailStatus').textContent = status.configured
     ? 'בהפקה יישלח אותו קובץ מקור גם למייל שהוזן, מאת ' + status.from + '.'
-    : 'משלוח במייל אינו זמין עד להשלמת חיבור התיבה השולחת. המקור יורד למכשיר.';
+    : 'משלוח במייל אינו זמין עד להשלמת חיבור התיבה השולחת. אפשר להוריד את המקור בסיום בלחיצה על ״הורדת מקור״.';
 }).catch(() => {
-  $('originalMailStatus').textContent = 'זמינות המשלוח לא אומתה. המקור יורד למכשיר ללא מייל.';
+  $('originalMailStatus').textContent = 'זמינות המשלוח לא אומתה. המקור יהיה זמין להורדה ידנית ללא מייל.';
 });
 
 function clearCustomerDelivery() {
@@ -561,11 +592,13 @@ function clearCustomerDelivery() {
   $('customerEmail').disabled = true;
   $('customerPhone').value = '';
   $('customerPhone').disabled = true;
+  $('customerDeliveryStatus').removeAttribute?.('data-state');
   $('customerDeliveryStatus').textContent = '';
   $('digitalStatus').textContent = 'יש לבחור לקוח לבדיקת הגדרת מסמך ממוחשב בפריוריטי.';
 }
 
 function showCustomerDelivery(profile) {
+  $('customerDeliveryStatus').removeAttribute?.('data-state');
   digitalCustomerProfile = profile;
   $('customerEmail').value = profile.email;
   $('customerPhone').value = profile.phone ?? '';
@@ -577,6 +610,7 @@ function showCustomerDelivery(profile) {
 
 async function loadCustomerDelivery(custname, request) {
   $('customerDelivery').hidden = false;
+  $('customerDeliveryStatus').removeAttribute?.('data-state');
   $('customerDeliveryStatus').textContent = 'טוען מייל, טלפון והגדרת מסמך ממוחשב מפריוריטי…';
   try {
     const profile = await api('/api/customers/digital?custname=' + encodeURIComponent(custname));
@@ -586,6 +620,7 @@ async function loadCustomerDelivery(custname, request) {
     $('customerPhone').disabled = false;
   } catch (error) {
     if (request !== digitalCustomerRequest) return;
+    $('customerDeliveryStatus').setAttribute?.('data-state', 'error');
     $('customerDeliveryStatus').textContent = 'טעינת הפרטים נכשלה. לחצו שוב על המשך למוצרים כדי לנסות שוב. ' + error.message;
   } finally {
     if (request === digitalCustomerRequest) digitalCustomerLoad = null;
@@ -609,6 +644,7 @@ async function saveCustomerDelivery() {
   const status = $('customerDeliveryStatus');
   field.disabled = true;
   phoneField.disabled = true;
+  status.removeAttribute?.('data-state');
   status.textContent = 'שומר ומאמת את פרטי הלקוח בפריוריטי…';
   try {
     const saved = await api('/api/customers/digital', {
@@ -617,9 +653,11 @@ async function saveCustomerDelivery() {
     });
     if (request !== digitalCustomerRequest) return false;
     showCustomerDelivery(saved);
+    if (custDetails?.CUSTNAME === custname) renderCustDetails({ ...custDetails,
+      WTAXNUM: saved.companyNumber, VATNUM: saved.vatNumber, WTAXNUMEXPL: saved.numberExplanation });
     return true;
   } catch (error) {
-    if (request === digitalCustomerRequest) status.textContent = 'לא ניתן לאמת את פרטי הלקוח. ' + error.message;
+    if (request === digitalCustomerRequest) { status.setAttribute?.('data-state', 'error'); status.textContent = 'לא ניתן לאמת את פרטי הלקוח. ' + error.message; }
     return false;
   } finally {
     if (request === digitalCustomerRequest) {
@@ -645,6 +683,7 @@ async function loadCustDetails(custname) {
     $('custAlloc').innerHTML = '';
     $('custEdit').classList.remove('show');
     $('custInfo').classList.add('show');
+    $('custInfo').open = true;
   }
 }
 
@@ -734,6 +773,7 @@ function setLineExchange(tr) {
 async function loadExchangeRates() {
   if ($('invoiceType').value === '1') return;
   const date = $('date').value;
+  const retry = $('retryExchangeRates'); if (retry) retry.hidden = true;
   const source = selectedRateSource();
   const cacheKey = `${source}:${date}`;
   currentExchangeRates = null;
@@ -741,7 +781,7 @@ async function loadExchangeRates() {
   recalc();
   if (!$('date').validity.valid || !date) { $('exchangeStatus').textContent = 'יש לבחור תאריך תקין לטעינת שער דולר.'; return; }
   $('exchangeStatus').textContent = source === 'boi' ? 'טוען שער דולר מבנק ישראל…' : 'טוען שערי דולר מפריוריטי…';
-  if (!exchangeRequests.has(cacheKey)) exchangeRequests.set(cacheKey, api('/api/exchange-rates?date=' + encodeURIComponent(date) + '&source=' + source));
+  if (!exchangeRequests.has(cacheKey)) { const request = api('/api/exchange-rates?date=' + encodeURIComponent(date) + '&source=' + source).catch(error => { if (exchangeRequests.get(cacheKey) === request) exchangeRequests.delete(cacheKey); throw error; }); exchangeRequests.set(cacheKey, request); }
   try {
     const data = await exchangeRequests.get(cacheKey);
     if ($('invoiceType').value === '1' || $('date').value !== date || selectedRateSource() !== source) return;
@@ -753,18 +793,20 @@ async function loadExchangeRates() {
   } catch (err) {
     if ($('invoiceType').value === '1' || $('date').value !== date || selectedRateSource() !== source) return;
     $('exchangeStatus').textContent = 'שער הדולר אינו זמין: ' + err.message + ' יש לטעון שער תקין לפני הפקת החשבונית.';
+    if (retry) retry.hidden = false;
   }
   for (const tr of tbody.rows) setLineExchange(tr);
   recalc();
 }
 $('date').addEventListener('change', loadExchangeRates);
 $('useBoiRates').addEventListener('change', loadExchangeRates);
+$('retryExchangeRates').addEventListener('click', loadExchangeRates);
 
 function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = '1', price = '') {
   const gold = $('invoiceType').value === '1';
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td class="part-cell"><input class="l-part" aria-label="מק״ט" maxlength="22" value="${escapeHtml(partname)}" required autocomplete="off" placeholder="מק&quot;ט או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
+    <td class="part-cell"><input class="l-part" aria-label="מק״ט או ברקוד" value="${escapeHtml(partname)}" required autocomplete="off" enterkeyhint="next" placeholder="מק&quot;ט, ברקוד או תיאור…"><div class="part-list" hidden></div><div class="l-desc"></div></td>
     <td><input class="l-grams" aria-label="כמות" type="number" inputmode="decimal" step="0.001" min="0.001" value="${grams}" required><span class="l-unit">${gold ? 'גרם' : 'לפי המוצר'}</span></td>
     <td><input class="l-price" aria-label="${gold ? 'מחיר בש״ח לגרם' : 'מחיר בדולרים ליחידה'}" type="number" inputmode="decimal" step="0.01" min="0.01" value="${price}" ${gold ? '' : 'readonly'} required></td>
     <td hidden><select class="l-currency" aria-label="מטבע מחיר" tabindex="-1">${gold ? '<option value="ש&quot;ח">ש״ח</option>' : '<option value="USD">USD</option><option value="$">$</option>'}</select></td>
@@ -774,7 +816,10 @@ function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = 
     <td><button type="button" class="del" title="מחיקת שורה">✕</button></td>`;
   tbody.appendChild(tr);
   setLineExchange(tr);
-  tr.querySelector('.l-grams').focus({ preventScroll: true });
+  recalc();
+  const sku = tr.querySelector('.l-part');
+  sku.focus({ preventScroll: true });
+  sku.select();
   // מק"ט שהגיע מוכן (ברירת מחדל 14) — משלימים את התיאור שלו מפריוריטי
   if (partname) {
     const initialType = $('invoiceType').value;
@@ -783,6 +828,7 @@ function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = 
       if (p && tr.isConnected && $('invoiceType').value === initialType && tr.querySelector('.l-part').value.trim() === partname) {
         const unit = p.PUNITNAME || p.UNITNAME || '';
         tr.querySelector('.l-desc').textContent = p.PARTDES || '';
+        tr.dataset.displayPart = partname;
         tr.querySelector('.l-unit').textContent = gold ? 'גרם' : unit || 'לפי המוצר';
         if (!gold && !tr.querySelector('.l-price').value) applyPartPrice(tr, p);
       }
@@ -790,7 +836,10 @@ function addLine(partname = $('invoiceType').value === '1' ? '14' : '', grams = 
   }
   return tr;
 }
-$('addLine').addEventListener('click', () => addLine());
+$('addLine').addEventListener('click', () => {
+  const row = addLine();
+  row.scrollIntoView({ block: 'center' });
+});
 tbody.addEventListener('click', e => {
   if (e.target.classList.contains('del')) {
     if (tbody.rows.length > 1) e.target.closest('tr').remove();
@@ -807,12 +856,18 @@ tbody.addEventListener('change', e => {
   }
   recalc();
 });
-$('discount').addEventListener('input', () => {
+function applyGlobalDiscount(event) {
+  const value = (event?.target || $('discount')).value;
+  $('discount').value = value;
+  $('discountBottom').value = value;
   for (const tr of tbody.rows) {
-    if (!tr.dataset.discountEdited) tr.querySelector('.l-discount').value = $('discount').value;
+    tr.querySelector('.l-discount').value = value;
+    delete tr.dataset.discountEdited;
   }
   recalc();
-});
+}
+$('discount').addEventListener('input', applyGlobalDiscount);
+$('discountBottom').addEventListener('input', applyGlobalDiscount);
 $('invoiceType').addEventListener('change', () => {
   const rows = [...tbody.rows];
   if (rows.length === 1 && ['', '14'].includes(rows[0].querySelector('.l-part').value) && Number(rows[0].querySelector('.l-grams').value) === 1 && !rows[0].querySelector('.l-price').value && !rows[0].dataset.discountEdited) {
@@ -828,7 +883,11 @@ $('typePicker').addEventListener('click', e => {
   if (!choice) return;
   const changed = $('invoiceType').value !== choice.dataset.type;
   const hasEnteredProducts = [...tbody.rows].some(tr => tr.querySelector('.l-price').value || Number(tr.querySelector('.l-grams').value) !== 1 || !['', '14'].includes(tr.querySelector('.l-part').value) || tr.dataset.discountEdited);
-  if (changed && hasEnteredProducts && !confirm('החלפת סוג החשבונית תנקה את המוצרים והמחירים כדי לבחור מק״טים מתאימים. פרטי הלקוח והחשבונית יישמרו. להמשיך?')) return;
+  if (changed && hasEnteredProducts && !confirm('החלפת סוג החשבונית תנקה את המוצרים והמחירים ותאפס את ההנחות כדי לבחור מק״טים מתאימים. פרטי הלקוח והחשבונית יישמרו. להמשיך?')) return;
+  if (changed) {
+    $('discount').value = '0';
+    applyGlobalDiscount();
+  }
   if (changed && hasEnteredProducts) tbody.replaceChildren();
   $('invoiceType').value = choice.dataset.type;
   $('invoiceScreen').hidden = false;
@@ -870,7 +929,7 @@ function renderPartList(input, items, emptyMsg) {
   const list = partRow(input).querySelector('.part-list');
   list.innerHTML = items.length
     ? items.map((p, i) => `<div data-i="${i}"><span class="code">${escapeHtml(p.PARTNAME)}</span><span>${escapeHtml(p.PARTDES || '')} <span class="sub">${$('invoiceType').value === '1' ? 'גרם · מחיר ידני בש״ח' : escapeHtml(p.PUNITNAME || p.UNITNAME || '') + (p.BASEPLPRICE > 0 && p.BASEPLCODE ? ' · ' + escapeHtml(p.BASEPLPRICE + ' ' + p.BASEPLCODE) : ' · אין מחיר בסיס זמין')}</span></span></div>`).join('')
-    : `<div style="color:var(--muted);cursor:default">${emptyMsg}</div>`;
+    : `<div style="color:var(--muted);cursor:default">${escapeHtml(emptyMsg)}</div>`;
   list.hidden = false;
 }
 
@@ -883,9 +942,12 @@ function pickPart(input, i, focusQuantity = true) {
   const st = partState.get(input);
   const p = st?.items?.[i];
   if (!p) return;
+  clearTimeout(st.timer);
+  st.revision = (st.revision || 0) + 1;
   const tr = partRow(input);
   input.value = p.PARTNAME;
   tr.dataset.selectedPart = p.PARTNAME;
+  tr.dataset.selectedType = $('invoiceType').value;
   const unit = p.PUNITNAME || p.UNITNAME || '';
   tr.querySelector('.l-desc').textContent = [p.PARTDES, p.FAMILYDES].filter(Boolean).join(' · ');
   tr.querySelector('.l-unit').textContent = unit || 'לפי המוצר';
@@ -917,31 +979,39 @@ tbody.addEventListener('input', e => {
   const input = e.target;
   if (!input.classList.contains('l-part')) return;
   const st = partState.get(input) || {};
+  st.revision = (st.revision || 0) + 1;
   st.items = []; st.active = -1;
   partState.set(input, st);
   clearTimeout(st.timer);
   hidePartList(input);
   partRow(input).querySelector('.l-price').value = '';
   delete partRow(input).dataset.selectedPart;
+  delete partRow(input).dataset.displayPart;
+  delete partRow(input).dataset.selectedType;
   partRow(input).querySelector('.l-desc').textContent = '';
   partRow(input).querySelector('.l-unit').textContent = 'לפי המוצר';
   recalc();
-  const q = input.value.trim();
+  const q = PartLookup.normalize(input.value);
   const searchType = $('invoiceType').value;
+  const revision = st.revision;
   if (!q) { hidePartList(input); return; }
+  if (!PartLookup.isValid(q)) {
+    partRow(input).querySelector('.l-desc').textContent = 'הקוד ארוך מדי או מכיל תווים לא תקינים. בדקו את הסריקה.';
+    return;
+  }
   st.timer = setTimeout(async () => {
     try {
       const data = await api('/api/parts?q=' + encodeURIComponent(q) + '&invoiceType=' + searchType);
-      if (!input.isConnected || input.value.trim() !== q || $('invoiceType').value !== searchType || partRow(input).dataset.selectedPart === q) return;
-      renderPartList(input, data.value || [], 'לא נמצאו פריטים');
+      if (!input.isConnected || st.revision !== revision || PartLookup.normalize(input.value) !== q || $('invoiceType').value !== searchType || partRow(input).dataset.selectedPart === q) return;
+      renderPartList(input, data.value || [], data.partial ? 'החיפוש הושלם חלקית. נסו מק״ט או ברקוד מדויק.' : 'לא נמצאו פריטים. לחצו Enter לבדיקת קוד מדויק.');
     } catch (err) {
-      if (!input.isConnected || input.value.trim() !== q || $('invoiceType').value !== searchType || partRow(input).dataset.selectedPart === q) return;
+      if (!input.isConnected || st.revision !== revision || PartLookup.normalize(input.value) !== q || $('invoiceType').value !== searchType || partRow(input).dataset.selectedPart === q) return;
       renderPartList(input, [], err.message);
     }
   }, 250);
 });
 
-tbody.addEventListener('mousedown', e => {
+tbody.addEventListener('pointerdown', e => {
   const d = e.target.closest('.part-list [data-i]');
   if (!d) return;
   e.preventDefault();
@@ -968,44 +1038,122 @@ tbody.addEventListener('keydown', e => {
   } else if (e.key === 'Escape') hidePartList(input);
 });
 
+async function resolvePartInput(partInput, focusErrors = true) {
+  const tr = partInput.closest('tr');
+  const term = PartLookup.normalize(partInput.value);
+  if (!term) { if (focusErrors) partInput.focus(); return false; }
+  if (!PartLookup.isValid(term)) {
+    tr.querySelector('.l-desc').textContent = 'הקוד ארוך מדי או מכיל תווים לא תקינים. בדקו את הסריקה.';
+    if (focusErrors) partInput.focus();
+    return false;
+  }
+  const type = $('invoiceType').value;
+  if (tr.dataset.selectedPart === term && tr.dataset.selectedType === type) return true;
+  const state = partState.get(partInput) || {};
+  partState.set(partInput, state);
+  const revision = state.revision || 0;
+  if (state.pending?.term === term && state.pending.revision === revision && state.pending.type === type) return state.pending.promise;
+  clearTimeout(state.timer);
+  // Invalidate an autocomplete response already in flight for the same text.
+  state.revision = revision + 1;
+  const pending = { term, type, revision: state.revision };
+  state.pending = pending;
+  tr.querySelector('.l-desc').textContent = 'בודק מק״ט או ברקוד…';
+  const isCurrent = () => tr.isConnected && PartLookup.normalize(partInput.value) === term
+    && $('invoiceType').value === type && state.revision === pending.revision && state.pending === pending;
+  pending.promise = (async () => {
+    try {
+      const data = await api('/api/parts?q=' + encodeURIComponent(term) + '&invoiceType=' + type + '&exact=1');
+      if (!isCurrent()) return false;
+      const matches = PartLookup.exactMatches(data.value || [], term);
+      if (matches.length !== 1 || data.truncated) {
+        const message = data.message || (matches.length > 1 || data.truncated
+          ? 'הקוד מתאים למספר מוצרים. יש לבחור במפורש מוצר מהרשימה או להזין מק״ט מלא.'
+          : 'לא נמצאה התאמה מדויקת. בדקו את הקוד או חפשו לפי תיאור ובחרו מוצר מהרשימה.');
+        renderPartList(partInput, matches, message);
+        tr.querySelector('.l-desc').textContent = message;
+        showMsg('err', escapeHtml(message));
+        if (focusErrors) partInput.focus();
+        return false;
+      }
+      renderPartList(partInput, matches, '');
+      pickPart(partInput, 0, false);
+      return true;
+    } catch (error) {
+      if (isCurrent()) {
+        renderPartList(partInput, [], 'החיפוש נכשל. לחצו Enter כדי לנסות שוב.');
+        tr.querySelector('.l-desc').textContent = 'החיפוש נכשל. לחצו Enter כדי לנסות שוב.';
+        showMsg('err', 'חיפוש המוצר נכשל: ' + escapeHtml(error.message));
+        if (focusErrors) partInput.focus();
+      }
+      return false;
+    } finally {
+      if (state.pending === pending) delete state.pending;
+    }
+  })();
+  return pending.promise;
+}
+
 async function advanceScannedLine(input) {
   const tr = input.closest('tr');
-  if (tr.dataset.scanBusy) return;
   const partInput = tr.querySelector('.l-part');
-  const term = partInput.value.trim();
-  if (!term) { partInput.focus(); return; }
-  const type = $('invoiceType').value;
-  tr.dataset.scanBusy = 'true';
-  try {
-    if (tr.dataset.selectedPart !== term) {
-      const st = partState.get(partInput);
-      clearTimeout(st?.timer);
-      const highlighted = input === partInput && st?.active >= 0 && !tr.querySelector('.part-list').hidden;
-      if (highlighted) pickPart(partInput, st.active, false);
-      else {
-        const data = await api('/api/parts?q=' + encodeURIComponent(term) + '&invoiceType=' + type + '&exact=1');
-        if (!tr.isConnected || partInput.value.trim() !== term || $('invoiceType').value !== type) return;
-        const matches = data.value || [];
-        const exact = matches.find(p => p.PARTNAME === term) || (matches.length === 1 ? matches[0] : null);
-        if (!exact) {
-          renderPartList(partInput, matches, 'לא נמצא מק״ט או ברקוד מתאים לסוג החשבונית');
-          showMsg('err', matches.length ? 'נמצאו מספר מוצרים לברקוד. יש לבחור מוצר מהרשימה.' : 'לא נמצא מוצר מתאים למק״ט או לברקוד שנסרק.');
-          partInput.focus(); return;
-        }
-        renderPartList(partInput, [exact], ''); pickPart(partInput, 0, false);
-      }
+  const state = partState.get(partInput);
+  if (input === partInput && state?.active >= 0 && !tr.querySelector('.part-list').hidden) {
+    pickPart(partInput, state.active, false);
+  }
+  if (!await resolvePartInput(partInput)) return;
+  hidePartList(partInput);
+  const next = tr.nextElementSibling || addLine('');
+  const nextInput = next.querySelector('.l-part');
+  nextInput.focus(); nextInput.select();
+}
+
+async function receiveCameraBarcode(value) {
+  if ($('productsStep').hidden) return false;
+  const code = PartLookup.normalize(value);
+  if (!PartLookup.isValid(code)) { showMsg('warn', 'לא זוהה קוד מוצר תקין. אפשר לנסות לסרוק שוב או להזין מק״ט.'); return false; }
+  const empty = [...tbody.rows].find(tr => {
+    const part = tr.querySelector('.l-part').value.trim();
+    const defaultGold = $('invoiceType').value === '1' && part === '14' && !tr.dataset.selectedPart && tr.dataset.displayPart === '14';
+    return (!part || defaultGold) && !tr.querySelector('.l-price').value
+      && Number(tr.querySelector('.l-grams').value) === 1 && !tr.dataset.discountEdited;
+  });
+  const row = empty || addLine('');
+  const input = row.querySelector('.l-part');
+  input.value = code;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if (!await resolvePartInput(input)) return false;
+  await advanceScannedLine(input);
+  return true;
+}
+
+async function validateProductSelections() {
+  let removedEmptyRow = false;
+  for (const tr of [...tbody.rows]) {
+    if (tbody.rows.length > 1 && !tr.querySelector('.l-part').value.trim()
+        && !tr.querySelector('.l-price').value && Number(tr.querySelector('.l-grams').value) === 1
+        && !tr.dataset.discountEdited) {
+      tr.remove();
+      removedEmptyRow = true;
     }
-    hidePartList(partInput);
-    const next = tr.nextElementSibling || addLine('');
-    const nextInput = next.querySelector('.l-part');
-    nextInput.focus(); nextInput.select();
-  } catch (err) {
-    if (tr.isConnected) { showMsg('err', 'חיפוש המוצר שנסרק נכשל: ' + escapeHtml(err.message)); partInput.focus(); }
-  } finally { delete tr.dataset.scanBusy; }
+  }
+  if (removedEmptyRow) recalc();
+  for (const tr of [...tbody.rows]) {
+    if (!tr.querySelector('.l-part').value.trim()) {
+      showMsg('warn', 'יש שורה ללא מוצר. בחרו מוצר או הסירו את השורה כדי להמשיך לבדיקה.');
+      tr.querySelector('.l-part').focus();
+      return false;
+    }
+    if (!await resolvePartInput(tr.querySelector('.l-part'))) return false;
+  }
+  return true;
 }
 
 tbody.addEventListener('focusout', e => {
-  if (e.target.classList.contains('l-part')) setTimeout(() => hidePartList(e.target), 150);
+  if (e.target.classList.contains('l-part')) {
+    if (PartLookup.normalize(e.target.value)) resolvePartInput(e.target, false);
+    setTimeout(() => hidePartList(e.target), 150);
+  }
 });
 
 function readLines() {
@@ -1047,6 +1195,7 @@ $('form').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = $('submit');
   if (btn.disabled) return;
+  if (!await validateProductSelections() || btn.disabled) return;
   msg.className = 'msg';
   $('documentMsg').className = 'msg';
   const lines = readLines();
@@ -1121,7 +1270,7 @@ $('form').addEventListener('submit', async e => {
     tbody.innerHTML = ''; addLine(); $('details').value = ''; recalc();
     if (typeof resetInvoiceFlow === 'function') resetInvoiceFlow();
     if(data.prepared===false){showMsg('warn','הטיוטה '+escapeHtml(data.ivnum)+' נוצרה, אך פרטי המשלוח לא אומתו: '+escapeHtml(data.preparationError||'')+' — אין להפיק שוב. אפשר לנסות לסגור את אותה טיוטה. <button type="button" class="close-btn" data-iv="'+escapeHtml(data.ivnum)+'">ניסיון סגירה חוזר</button>');return;}
-    btn.textContent = 'סוגר ומכין מקור להורדה…';
+    btn.textContent = 'סוגר ושומר את המקור…';
     if (typeof InvoiceProgress !== 'undefined') InvoiceProgress.update('closing');
     await closeInvoice(data.ivnum, null, false);
     loadRecent();
@@ -1129,27 +1278,33 @@ $('form').addEventListener('submit', async e => {
     showMsg('err', '✖ ' + err.message);
   } finally {
     if (typeof InvoiceProgress !== 'undefined') InvoiceProgress.hide();
-    btn.disabled = false; btn.textContent = 'הפקה, סגירה והורדת מקור';
+    btn.disabled = false; btn.textContent = 'הפקה והמשך לחתימה';
   }
 });
 
 // ---------- חשבוניות אחרונות ----------
 let recentRequest = 0;
 let agentRecentRequest = 0;
-function renderRecentInvoices(rows, scope) {
-  return '<ol class="recent-list" aria-label="חשבוניות אחרונות">' + rows.map((r, index) => {
+let agentRecentRows = [], agentRecentBefore = null, agentRecentAgent = '', agentRecentLoading = false;
+function renderRecentInvoices(rows, scope, startIndex = 0, itemsOnly = false) {
+  const items = rows.map((r, index) => {
+      index += startIndex;
       const ivnum = escapeHtml(r.IVNUM);
       const draft = r.STATDES === 'טיוטא';
+      const disabled = r.canManageDocuments === false ? ' disabled' : '';
       const date = escapeHtml((r.IVDATE || '').slice(0,10).split('-').reverse().join('.'));
       return `<li class="recent-invoice"><article aria-labelledby="recentTitle${scope}${index}">
         <div class="recent-invoice-header"><div><h3 id="recentTitle${scope}${index}">חשבונית <bdi>${ivnum}</bdi></h3><div class="recent-meta"><span>${date}</span><span class="invoice-status ${draft ? 'draft' : 'final'}">${escapeHtml(r.STATDES || '')}</span></div></div><div class="recent-amount"><span>סה״כ</span><strong>${fmt(r.TOTPRICE)}</strong></div></div>
         ${scope === 'agent' ? `<p class="recent-reference">לקוח ${escapeHtml(r.CDES || '')} <bdi>${escapeHtml(r.CUSTNAME || '')}</bdi></p>` : ''}
         ${r.DETAILS ? `<p class="recent-reference">פרטים: ${escapeHtml(r.DETAILS)}</p>` : ''}
-        ${scope === 'customer' ? `<div class="recent-actions" role="group" aria-label="פעולות לחשבונית ${ivnum}">
-          ${draft ? `<button type="button" class="close-btn recent-primary" data-iv="${ivnum}">סגירה לחשבונית סופית</button>` : `<button type="button" class="close-btn signed-copy-btn recent-primary" data-iv="${ivnum}">העתק חתום</button><button type="button" class="close-btn sign-btn" data-iv="${ivnum}">פתיחה וחתימה</button>`}
-          <details class="invoice-more"><summary>אפשרויות נוספות</summary><div class="invoice-more-actions"><button type="button" class="close-btn dl-btn" data-iv="${ivnum}">הורדת העתק PDF</button>${draft ? '' : `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${ivnum}">הורדת מקור</button>`}</div></details>
-        </div>` : ''}</article></li>`;
-    }).join('') + '</ol>';
+        <div class="recent-actions" role="group" aria-label="פעולות לחשבונית ${ivnum}">
+          ${draft ? `<button type="button" class="close-btn recent-primary" data-iv="${ivnum}"${disabled}>סגירה לחשבונית סופית</button>` : `<button type="button" class="close-btn signed-copy-btn recent-primary" data-iv="${ivnum}"${disabled}>העתק חתום</button><button type="button" class="close-btn sign-btn" data-iv="${ivnum}"${disabled}>פתיחה וחתימה</button><button type="button" class="close-btn resend-btn" data-iv="${ivnum}"${disabled}>שליחה חוזרת למייל</button>`}
+          <details class="invoice-more"><summary>אפשרויות נוספות</summary><div class="invoice-more-actions"><button type="button" class="close-btn dl-btn" data-iv="${ivnum}"${disabled}>הורדת העתק PDF</button>${draft ? '' : `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${ivnum}"${disabled}>הורדת מקור</button>`}</div></details>
+        </div>
+        ${disabled ? '<p class="field-note">פעולות המסמכים זמינות רק לחשבוניות שבטיפול משתמש המערכת.</p>' : ''}
+        </article></li>`;
+    }).join('');
+  return itemsOnly ? items : '<ol class="recent-list" aria-label="חשבוניות אחרונות">' + items + '</ol>';
 }
 
 async function loadRecent() {
@@ -1172,31 +1327,62 @@ async function loadRecent() {
     el.textContent = 'לא ניתן לטעון את חשבוניות הלקוח: ' + e.message + '. אפשר לנסות שוב בלחיצה על רענון.';
   }
 }
-async function loadAgentRecent() {
-  const request = ++agentRecentRequest;
+async function loadAgentRecent(append = false) {
+  const more = append === true;
   const agent = $('agent').value.trim();
+  if (more && (agentRecentLoading || !agentRecentBefore || agentRecentAgent !== agent)) return;
+  const request = ++agentRecentRequest;
   const body = $('agentRecentBody');
+  const button = $('agentLoadMoreBtn'), status = $('agentMoreStatus');
+  if (!more) {
+    if (agentRecentAgent !== agent) $('agentDocumentStatus').className = 'msg';
+    agentRecentRows = []; agentRecentBefore = null; agentRecentAgent = agent;
+    button.hidden = true;
+    $('agentRecentHint').textContent = agent ? '10 חשבוניות בכל טעינה' : '';
+  }
+  status.hidden = true;
   $('agentRefreshBtn').disabled = !agent;
   $('agentRecentTitle').textContent = agent ? 'חשבוניות אחרונות · סוכן ' + agent : 'חשבוניות אחרונות של הסוכן';
-  $('agentRecentHint').textContent = agent ? 'עד 10 חשבוניות אחרונות בפריוריטי' : '';
   if (!agent) {
+    agentRecentLoading = false;
     body.textContent = 'להצגת החשבוניות יש להגדיר סוכן בקישור או בפרטי החשבונית.';
     return;
   }
-  body.textContent = 'טוען את חשבוניות הסוכן…';
+  agentRecentLoading = true; button.disabled = true; button.textContent = 'טוען…';
+  if (!more) body.textContent = 'טוען את חשבוניות הסוכן…';
   try {
-    const data = await api('/api/invoices/recent?agent=' + encodeURIComponent(agent));
+    const data = await api('/api/invoices/recent?agent=' + encodeURIComponent(agent) + (more ? '&before=' + encodeURIComponent(agentRecentBefore) : ''));
     if (request !== agentRecentRequest || $('agent').value.trim() !== agent) return;
-    const rows = (data.value || []).filter(row => String(row.AGENTCODE) === agent);
-    if (!rows.length) { body.textContent = 'אין חשבוניות להצגה לסוכן הזה.'; return; }
-    body.innerHTML = renderRecentInvoices(rows, 'agent');
+    const nextBefore = data.hasMore === true ? String(data.nextBefore || '') : null;
+    if (data.hasMore === true && (!/^[1-9][0-9]*$/.test(nextBefore) || !Number.isSafeInteger(Number(nextBefore))
+      || (more && Number(nextBefore) >= Number(agentRecentBefore)))) throw Error('לא התקבל מיקום המשך תקין של החשבוניות');
+    const seen = new Set(agentRecentRows.map(row => row.IVNUM));
+    const rows = (data.value || []).filter(row => {
+      if (String(row.AGENTCODE) !== agent || seen.has(row.IVNUM)) return false;
+      seen.add(row.IVNUM); return true;
+    });
+    if (more && agentRecentRows.length) body.querySelector('.recent-list').insertAdjacentHTML('beforeend', renderRecentInvoices(rows, 'agent', agentRecentRows.length, true));
+    else if (rows.length) body.innerHTML = renderRecentInvoices(rows, 'agent');
+    else body.textContent = 'אין חשבוניות להצגה לסוכן הזה.';
+    agentRecentRows.push(...rows);
+    agentRecentBefore = nextBefore;
+    button.hidden = !nextBefore;
+    $('agentRecentHint').textContent = 'מוצגות ' + agentRecentRows.length + ' חשבוניות' + (nextBefore ? ' · עד 10 נוספות בכל טעינה' : ' · אין חשבוניות נוספות');
   } catch (error) {
     if (request !== agentRecentRequest || $('agent').value.trim() !== agent) return;
-    body.textContent = 'לא ניתן לטעון את חשבוניות הסוכן: ' + error.message + '. אפשר לנסות שוב בלחיצה על רענון.';
+    if (more) {
+      status.hidden = false;
+      status.textContent = 'טעינת החשבוניות הנוספות נכשלה: ' + error.message + '. אפשר לנסות שוב בלחיצה על טען עוד.';
+    } else body.textContent = 'לא ניתן לטעון את חשבוניות הסוכן: ' + error.message + '. אפשר לנסות שוב בלחיצה על רענון.';
+  } finally {
+    if (request === agentRecentRequest) {
+      agentRecentLoading = false; button.disabled = false; button.textContent = 'טען עוד 10 חשבוניות';
+    }
   }
 }
 $('refreshBtn').addEventListener('click', loadRecent);
 $('agentRefreshBtn').addEventListener('click', loadAgentRecent);
+$('agentLoadMoreBtn').addEventListener('click', () => loadAgentRecent(true));
 $('agent').addEventListener('change', loadAgentRecent);
 $('changeType').addEventListener('click', loadAgentRecent);
 loadRecent();
@@ -1205,7 +1391,9 @@ loadAgentRecent();
 // ---------- סגירת חשבונית (טיוטה -> סופית IN) ----------
 async function closeInvoice(ivnum, btn, confirmFirst = true) {
   if (confirmFirst && !confirm(`לסגור את חשבונית ${ivnum}?\nהחשבונית תהפוך לסופית (מספר IN) — פעולה שאי אפשר לבטל.`)) return;
-  const documentKind = 'copy';
+  const documentKind = 'original';
+  const agentNotice = btn?.closest?.('#agentRecentBody') ? $('agentDocumentStatus') : null;
+  if (agentNotice) { agentNotice.className = 'msg show'; agentNotice.textContent = 'סוגר את חשבונית ' + ivnum + '…'; }
   if (btn) { btn.disabled = true; btn.textContent = 'סוגר…'; }
   try {
     const data = await api('/api/invoices/close', {
@@ -1213,17 +1401,22 @@ async function closeInvoice(ivnum, btn, confirmFirst = true) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ivnum }),
     });
-    showMsg('ok', `✔ החשבונית נסגרה: <b class="num-ltr">${data.ivnum}</b>${data.status ? ' · ' + data.status : ''}\nמכין את המסמך להורדה… <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="${documentKind}" style="margin-top:6px">הורדה חוזרת ⬇</button> <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="copy">הורדת העתק</button>`);
-    // Digital flow opens a copy and requests native email; the legacy route remains available.
-    const autoBtn = msg.querySelector('.dl-btn');
+    if (agentNotice) { agentNotice.className = 'msg show ok'; agentNotice.textContent = 'החשבונית נסגרה: ' + data.ivnum + '. פעולות המסמכים זמינות ברשימה המעודכנת.'; }
+    showMsg('ok', `✔ החשבונית נסגרה: <b class="num-ltr">${data.ivnum}</b>${data.status ? ' · ' + data.status : ''}\nהמקור יורד רק בלחיצה על כפתור ההורדה. <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="${documentKind}" style="margin-top:6px">הורדת מקור</button> <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="copy">הורדת העתק</button>`);
+    // Preparation and signing stay inside the app; document downloads require a click.
     if(data.originalDownload)await finishOriginalDownload(data);
     else if(data.digitalEmail)await finishDigitalInvoice(data);
-    else await downloadInvoice(data.ivnum, autoBtn, documentKind);
+    else {
+      $('documentMsg').className = 'msg show ok';
+      $('documentMsg').textContent = 'החשבונית סופית. ניתן להוריד מסמך באמצעות כפתורי ההורדה.';
+    }
   } catch (err) {
+    if (agentNotice) { agentNotice.className = 'msg show warn'; agentNotice.textContent = 'סגירת חשבונית ' + ivnum + ' לא אומתה: ' + err.message + '. אין להפיק אותה שוב; יש לבדוק את מצבה בפריוריטי.'; }
     showMsg('warn', `החשבונית <b class="num-ltr">${escapeHtml(ivnum)}</b> כבר נוצרה, אך הסגירה לא אומתה: ${escapeHtml(err.message)}\nאין להפיק אותה שוב. אפשר לבדוק בפריוריטי או לנסות לסגור את אותה טיוטה.\n<button type="button" class="close-btn" data-iv="${escapeHtml(ivnum)}">ניסיון סגירה חוזר</button>`);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'סגירה ל-IN'; }
     loadRecent();
+    loadAgentRecent();
   }
 }
 const pendingDownloads = new Map();
@@ -1237,7 +1430,9 @@ async function downloadInvoice(ivnum, btn, kind = btn?.dataset?.kind || 'copy') 
 async function fetchInvoiceDocument(ivnum, btn, kind) {
   const orig = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = kind === 'original' ? 'מוריד…' : 'מפיק…'; }
-  const notice = $('documentMsg');
+  const notice = btn?.closest?.('#agentRecentBody') ? $('agentDocumentStatus')
+    : $('completionNotice')?.hidden === false && $('invoiceScreen')?.hidden === true && $('completionDocumentStatus')
+      ? $('completionDocumentStatus') : $('documentMsg');
   notice.className = 'msg show';
   notice.textContent = 'מכין את המסמך של חשבונית ' + ivnum + ' להורדה…';
   try {
@@ -1270,7 +1465,7 @@ async function fetchInvoiceDocument(ivnum, btn, kind) {
     const objectUrl = a.href;
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
     notice.className = 'msg show ok';
-    notice.textContent = 'המסמך של חשבונית ' + ivnum + ' נשלח להורדה. אם הדפדפן חסם אותו, אפשר ללחוץ על הורדה חוזרת.';
+    notice.textContent = 'המסמך של חשבונית ' + ivnum + ' נשלח להורדה. אם הדפדפן חסם אותו, אפשר לנסות שוב דרך כפתור ההורדה.';
     return true;
   } catch (err) {
     notice.className = 'msg show warn';
@@ -1283,8 +1478,9 @@ async function fetchInvoiceDocument(ivnum, btn, kind) {
 
 document.addEventListener('click', e => {
   const b = e.target.closest('.close-btn');
-  if (!b) return;
+  if (!b || b.disabled) return;
   if (b.classList.contains('signed-copy-btn')) openSignedInvoice(b.dataset.iv, b);
+  else if (b.classList.contains('resend-btn')) openInvoiceResend(b.dataset.iv, b);
   else if (b.classList.contains('sign-btn')) openInvoiceForSigning(b.dataset.iv);
   else if (b.classList.contains('prepare-original-btn')) finishOriginalDownload({ivnum:b.dataset.iv,email:b.dataset.email,sendOriginalEmail:b.dataset.sendOriginalEmail==='true'});
   else if (b.classList.contains('dl-btn')) downloadInvoice(b.dataset.iv, b);
@@ -1301,5 +1497,30 @@ document.addEventListener('click', e => {
   <a id="signedCopyLink" target="_blank" rel="noopener" hidden>פתיחת ההעתק החתום בחלון נפרד</a>
 </dialog>
 <script src="/signed-copy.js"></script>
+<dialog id="resendDialog" class="signed-copy-viewer invoice-resend" aria-labelledby="resendTitle" dir="rtl">
+  <form id="resendForm">
+    <div class="signed-copy-heading"><h2 id="resendTitle">שליחה חוזרת למייל</h2><button type="button" id="closeResend">סגירה</button></div>
+    <p id="resendCustomer" class="field-note"></p>
+    <p class="field-note">יישלח מקור החשבונית השמור בפריוריטי. כתובת הנמען כאן חלה על המשלוח הזה בלבד ואינה משנה את כרטיס הלקוח.</p>
+    <label for="resendEmail">כתובת מייל למשלוח</label>
+    <input id="resendEmail" type="email" dir="ltr" inputmode="email" autocomplete="email" maxlength="68" required>
+    <p id="resendStatus" role="status" aria-live="polite"></p>
+    <button type="submit" id="sendResend" disabled>אישור ושליחה חוזרת</button>
+  </form>
+</dialog>
+<script src="/invoice-resend.js"></script>
+<script src="/invoice-presentation.js"></script>
+<dialog id="cameraScanner" class="camera-scanner" aria-labelledby="cameraScannerTitle" aria-describedby="cameraScannerHint" dir="rtl">
+  <div class="camera-heading"><h2 id="cameraScannerTitle">סריקת מוצר</h2><button type="button" id="closeCameraScanner" aria-label="סגירת המצלמה">סגירה</button></div>
+  <p id="cameraScannerHint">כוונו את המצלמה לברקוד או לקוד QR של המוצר.</p>
+  <div class="camera-preview"><video id="cameraVideo" autoplay muted playsinline aria-label="תצוגת המצלמה לסריקה"></video><span class="camera-target" aria-hidden="true"></span></div>
+  <p id="cameraScannerStatus" role="status" aria-live="polite"></p>
+  <div class="camera-actions"><button type="button" id="retryCamera">ניסיון נוסף</button><button type="button" id="cameraPhoto">צילום ברקוד או בחירת תמונה</button></div>
+  <p class="field-note">הפענוח מתבצע במכשיר. רק הקוד שזוהה משמש לחיפוש המוצר.</p>
+  <input id="cameraPhotoInput" type="file" accept="image/*" capture="environment" hidden>
+</dialog>
+<script src="/vendor/zxing-browser.min.js"></script>
+<script src="/barcode-reader.js?v=2"></script>
+<script src="/camera-scanner.js?v=2"></script>
 </body>
 </html>

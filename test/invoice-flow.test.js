@@ -5,9 +5,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function flow(saveCustomerDelivery = async () => true) {
+function flow(saveCustomerDelivery = async () => true, validateProducts = async () => true) {
   class Element {
-    constructor() { this.listeners = {}; this.attributes = {}; this.hidden = false; this.value = ''; this.fields = []; this.children = []; this.tagName = 'INPUT'; this.classList={remove(){}}; }
+    constructor() { this.listeners = {}; this.attributes = {}; this.dataset = {}; this.hidden = false; this.value = ''; this.fields = []; this.children = []; this.tagName = 'INPUT'; this.classList={remove(){}}; }
     addEventListener(type, handler) { (this.listeners[type] ||= []).push(handler); }
     async fire(type, event = {}) { for (const handler of this.listeners[type] || []) await handler(event); }
     setAttribute(key, value) { this.attributes[key] = value; }
@@ -21,7 +21,7 @@ function flow(saveCustomerDelivery = async () => true) {
     replaceChildren(...children) { this.children = children; }
     append(...children) { this.children.push(...children); }
   }
-  const ids = ['completionNotice','completionDetails','completionTitle','msg','documentMsg','custChosen','custInfo','custEdit','customerStep', 'productsStep', 'reviewStep', 'signatureDialog', 'changeType', 'form', 'reviewCustomer', 'reviewDate', 'reviewDetails', 'reviewDetailsRow', 'reviewLines', 'custSearch', 'custname', 'date', 'details', 'lines', 'previousStep', 'nextStep', 'stepCount', 'stepStatus', 'submit', 'typePicker', 'invoiceScreen'];
+  const ids = ['completionOriginal','completionDocumentStatus','completionNotice','completionDetails','completionTitle','msg','documentMsg','custChosen','custInfo','custEdit','customerStep', 'productsStep', 'reviewStep', 'signatureDialog', 'changeType', 'form', 'reviewCustomer', 'reviewDate', 'reviewDetails', 'reviewDetailsRow', 'reviewLines', 'custSearch', 'custname', 'date', 'details', 'lines', 'previousStep', 'nextStep', 'stepCount', 'stepStatus', 'submit', 'typePicker', 'invoiceScreen'];
   const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
   const panels = ['customerStep', 'productsStep', 'reviewStep', 'signatureDialog'].map(id => elements[id]);
   panels.forEach((panel, index) => { panel.heading = new Element(); panel.hidden = index !== 0; });
@@ -40,6 +40,7 @@ function flow(saveCustomerDelivery = async () => true) {
     document: {getElementById:id => elements[id], querySelectorAll:() => buttons, createElement:() => new Element()},
     loadCustDetails() { customerLoads++; },
     saveCustomerDelivery,
+    validateProductSelections: validateProducts,
     clearCustomerDelivery() {},
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/invoice-flow.js'), 'utf8'), context);
@@ -92,6 +93,7 @@ test('customer contact fields ignore late responses and save edits for the selec
   const loads = new Map();
   const writes = [];
   const context = {
+    custDetails: null,
     $: id => fields[id],
     api(url, options) {
       if (options) {
@@ -129,6 +131,8 @@ test('verified signature completion returns to the first page with thanks and cl
   assert.equal(ui.elements.invoiceScreen.hidden,true);
   assert.equal(ui.elements.typePicker.hidden,false);
   assert.equal(ui.elements.completionNotice.hidden,false);
+  assert.equal(ui.elements.completionOriginal.hidden,false);
+  assert.equal(ui.elements.completionOriginal.dataset.iv,'IN-TEST-DOR');
   assert.match(ui.elements.completionDetails.textContent,/IN-TEST-DOR/);
   assert.equal(ui.elements.custname.value,'');
   assert.equal(ui.elements.completionTitle.focused,true);
@@ -197,4 +201,16 @@ test('early submit advances without issuing; handled scanner Enter is preserved'
   assert.equal(ui.panels[0].hidden, false);
   assert.equal(ui.panels[2].hidden, true);
   assert.equal(e.custname.value, '301100');
+});
+
+
+test('a failed product check keeps the current product screen and the error focus',async()=>{
+  const ui=flow(async()=>true,async()=>{ui.row.selectors['.l-part'].focus();return false;});
+  await ui.elements.nextStep.fire('click');
+  ui.panels[1].heading.focused=false;
+  await ui.elements.nextStep.fire('click');
+  assert.equal(ui.panels[1].hidden,false);
+  assert.equal(ui.panels[2].hidden,true);
+  assert.equal(ui.panels[1].heading.focused,false);
+  assert.equal(ui.row.selectors['.l-part'].focused,true);
 });

@@ -1,0 +1,287 @@
+{
+  "date": "2026-11-16",
+  "phone": [
+    {
+      "screen": "start",
+      "scrollWidth": 375,
+      "title": "מה עושים עכשיו?",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "customer",
+      "scrollWidth": 375,
+      "title": "למי החשבונית?",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "products",
+      "scrollWidth": 390,
+      "title": "מה מוסיפים לחשבונית?",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "review",
+      "scrollWidth": 375,
+      "title": "בודקים לפני ההפקה",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "processing",
+      "scrollWidth": 390,
+      "title": "מפיקים את החשבונית",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "signature",
+      "scrollWidth": 375,
+      "title": "עיון וחתימת לקוח",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "success",
+      "scrollWidth": 375,
+      "title": "החתימה נשמרה",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "invoices",
+      "scrollWidth": 375,
+      "title": "החשבוניות שלי",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "invoice",
+      "scrollWidth": 390,
+      "title": "חשבונית DEMO-001",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "recovery",
+      "scrollWidth": 390,
+      "title": "הסגירה עדיין לא אומתה",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "customer-missing",
+      "scrollWidth": 375,
+      "title": "למי החשבונית?",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "customer-error",
+      "scrollWidth": 375,
+      "title": "למי החשבונית?",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "product-error",
+      "scrollWidth": 375,
+      "title": "מה מוסיפים לחשבונית?",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "rate-error",
+      "scrollWidth": 375,
+      "title": "מה מוסיפים לחשבונית?",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "duplicate",
+      "scrollWidth": 390,
+      "title": "נמצאה חשבונית עם אותו מזהה",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "offline",
+      "scrollWidth": 390,
+      "title": "אין חיבור לפריוריטי",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "original-error",
+      "scrollWidth": 390,
+      "title": "החשבונית סופית; המקור בבדיקה",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "download-error",
+      "scrollWidth": 390,
+      "title": "המקור מוכן להורדה",
+      "width": 390,
+      "hasMain": true
+    },
+    {
+      "screen": "mail-uncertain",
+      "scrollWidth": 375,
+      "title": "החשבונית הופקה; המייל בבדיקה",
+      "width": 375,
+      "hasMain": true
+    },
+    {
+      "screen": "signature-error",
+      "scrollWidth": 375,
+      "title": "עיון וחתימת לקוח",
+      "width": 375,
+      "hasMain": true
+    }
+  ],
+  "tablet": [
+    {
+      "screen": "start",
+      "scrollWidth": 834,
+      "summaryVisible": false,
+      "title": "מה עושים עכשיו?",
+      "width": 834
+    },
+    {
+      "screen": "customer",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "למי החשבונית?",
+      "width": 834
+    },
+    {
+      "screen": "products",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "מה מוסיפים לחשבונית?",
+      "width": 834
+    },
+    {
+      "screen": "review",
+      "scrollWidth": 819,
+      "summaryVisible": true,
+      "title": "בודקים לפני ההפקה",
+      "width": 819
+    },
+    {
+      "screen": "processing",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "מפיקים את החשבונית",
+      "width": 834
+    },
+    {
+      "screen": "signature",
+      "scrollWidth": 834,
+      "summaryVisible": false,
+      "title": "עיון וחתימת לקוח",
+      "width": 834
+    },
+    {
+      "screen": "success",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "החתימה נשמרה",
+      "width": 834
+    },
+    {
+      "screen": "invoices",
+      "scrollWidth": 834,
+      "summaryVisible": false,
+      "title": "החשבוניות שלי",
+      "width": 834
+    },
+    {
+      "screen": "invoice",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "חשבונית DEMO-001",
+      "width": 834
+    },
+    {
+      "screen": "recovery",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "הסגירה עדיין לא אומתה",
+      "width": 834
+    },
+    {
+      "screen": "customer-missing",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "למי החשבונית?",
+      "width": 834
+    },
+    {
+      "screen": "customer-error",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "למי החשבונית?",
+      "width": 834
+    },
+    {
+      "screen": "product-error",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "מה מוסיפים לחשבונית?",
+      "width": 834
+    },
+    {
+      "screen": "rate-error",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "מה מוסיפים לחשבונית?",
+      "width": 834
+    },
+    {
+      "screen": "duplicate",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "נמצאה חשבונית עם אותו מזהה",
+      "width": 834
+    },
+    {
+      "screen": "offline",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "אין חיבור לפריוריטי",
+      "width": 834
+    },
+    {
+      "screen": "original-error",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "החשבונית סופית; המקור בבדיקה",
+      "width": 834
+    },
+    {
+      "screen": "download-error",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "המקור מוכן להורדה",
+      "width": 834
+    },
+    {
+      "screen": "mail-uncertain",
+      "scrollWidth": 834,
+      "summaryVisible": true,
+      "title": "החשבונית הופקה; המייל בבדיקה",
+      "width": 834
+    },
+    {
+      "screen": "signature-error",
+      "scrollWidth": 834,
+      "summaryVisible": false,
+      "title": "עיון וחתימת לקוח",
+      "width": 834
+    }
+  ]
+}

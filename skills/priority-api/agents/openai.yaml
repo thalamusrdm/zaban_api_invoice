@@ -1,0 +1,6 @@
+interface:
+  display_name: "Priority API"
+  short_description: "Priority ERP queries, invoices and SDK actions"
+  default_prompt: "Use $priority-api to implement this Priority ERP operation using the relevant compact reference."
+policy:
+  allow_implicit_invocation: true

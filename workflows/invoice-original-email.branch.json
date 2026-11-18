@@ -1,0 +1,299 @@
+{
+  "nodes": [
+    {
+      "id": "bb6e828d-b8ad-4dbe-8196-c852f49bc23c",
+      "name": "Invoice Original Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        600
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "invoice-original-email",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "ee34f861-fc47-4e64-98b1-105bfb384ee7"
+    },
+    {
+      "id": "a7fc7a1e-138d-4af0-95a8-5512fa9736da",
+      "name": "Invoice Readiness Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        600
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "97f69ca2-8bbb-4a22-aade-056bf65e0a0a",
+              "leftValue": "={{ $json.body?.action === 'check' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "dea356f8-77a2-42fe-b578-bf1e91674ca2",
+      "name": "Invoice Mail Ready",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        440
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ready\":true,\"protocol\":\"zaban-original-v1\",\"from\":\"sales@zaban-bechor.co.il\"}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "e700c018-22d9-4c50-8140-819abe2952ee",
+      "name": "Validate Invoice Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        760
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "927741eb-65d6-4979-b4d6-9fed0b39d249",
+              "leftValue": "={{ $json.body?.action === 'send' && $json.body.protocol === 'zaban-original-v1' && typeof $json.body.email === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test($json.body.email) && /^IN[0-9]+$/.test($json.body.ivnum || '') && /^[a-f0-9]{64}$/.test($json.body.workflow_key || '') && /^[a-f0-9]{64}$/.test($json.body.sha256 || '') && typeof $json.body.pdf_base64 === 'string' && $json.body.pdf_base64.startsWith('JVBERi0') && $json.body.pdf_base64.length <= 3733336 && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test($json.body.pdf_base64) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "000f2def-77e2-4628-a5b0-5cc15a8d14fe",
+      "name": "Restore Original PDF Bytes",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        660
+      ],
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "body.pdf_base64",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "={{ $('Invoice Original Webhook').first().json.body.ivnum + '-original.pdf' }}",
+          "mimeType": "application/pdf"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "16e55816-1686-4bbf-bb11-e2dcdaadc0d3",
+      "name": "Send Original Invoice via Sales",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        960,
+        660
+      ],
+      "parameters": {
+        "toRecipients": "={{ $('Invoice Original Webhook').first().json.body.email }}",
+        "subject": "={{ 'חשבונית מקור ' + $('Invoice Original Webhook').first().json.body.ivnum }}",
+        "bodyContent": "={{ 'שלום,\\nמצורפת חשבונית המקור ' + $('Invoice Original Webhook').first().json.body.ivnum + '.\\nצבאן בכור תכשיטים' }}",
+        "additionalFields": {
+          "attachments": {
+            "attachments": [
+              {
+                "binaryPropertyName": "data"
+              }
+            ]
+          },
+          "bodyContentType": "text",
+          "replyTo": "sales@zaban-bechor.co.il",
+          "saveToSentItems": true
+        }
+      },
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "KL5LLuH58WD9pNpF",
+          "name": "Sales@zaban-bechor.co.il"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "52a0dcce-5734-4195-a3ff-3fa81c036eba",
+      "name": "Invoice Mail Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        560
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: true, protocol: 'zaban-original-v1', from: 'sales@zaban-bechor.co.il', email: $('Invoice Original Webhook').first().json.body.email, ivnum: $('Invoice Original Webhook').first().json.body.ivnum, workflow_key: $('Invoice Original Webhook').first().json.body.workflow_key, sha256: $('Invoice Original Webhook').first().json.body.sha256, messageId: $json.id || '' }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "f6db4012-2d45-4e37-a64c-d93b1c177e8e",
+      "name": "Invoice Request Rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        920
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"accepted\":false,\"error\":\"Invalid invoice mail request\"}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "d1c763c0-8777-46c5-8e02-26d33f295764",
+      "name": "Invoice Mail Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        820
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"accepted\":false,\"error\":\"Mail not confirmed. Check Sales Sent Items and execution before retrying.\"}",
+        "options": {
+          "responseCode": 502
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Invoice Original Webhook": {
+      "main": [
+        [
+          {
+            "node": "Invoice Readiness Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Readiness Check": {
+      "main": [
+        [
+          {
+            "node": "Invoice Mail Ready",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Invoice Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Invoice Request": {
+      "main": [
+        [
+          {
+            "node": "Restore Original PDF Bytes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invoice Request Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Original PDF Bytes": {
+      "main": [
+        [
+          {
+            "node": "Send Original Invoice via Sales",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invoice Mail Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Original Invoice via Sales": {
+      "main": [
+        [
+          {
+            "node": "Invoice Mail Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invoice Mail Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

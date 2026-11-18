@@ -11,6 +11,7 @@ function exchangeUI(api) {
     lines: { querySelector: () => ({ rows }) },
     date: { value: '2026-10-20', validity: { valid: true }, addEventListener() {} },
     exchangeStatus: { textContent: '' },
+    retryExchangeRates: { hidden: true, addEventListener(name, fn) { this[name] = fn; } },
     useBoiRates: { checked: true, addEventListener() {} },
     invoiceType: { value: '2', addEventListener() {} },
   };
@@ -81,4 +82,17 @@ test('switching sources separates caches and ignores the previous in-flight sour
   ui.elements.useBoiRates.checked = false;
   await ui.ctx.load();
   assert.equal(Number(field.value), 3.22422); assert.equal(calls, 2);
+});
+
+test('a failed rate request can be retried in place and fills existing lines without losing invoice data', async () => {
+ let calls=0;const ui=exchangeUI(async()=>{if(++calls===1)throw new Error('temporary outage');return {date:'2026-10-20',source:'bank-of-israel',rates:{USD:{rate:3.11,rateDate:'2026-10-19'}}};});
+ const field=ui.addRow('USD');await ui.ctx.load();assert.equal(field.value,'');assert.equal(ui.elements.retryExchangeRates.hidden,false);
+ await ui.elements.retryExchangeRates.click();assert.equal(calls,2);assert.equal(Number(field.value),3.1722);assert.equal(ui.elements.retryExchangeRates.hidden,true);
+ await ui.ctx.load();assert.equal(calls,2);
+});
+test('simultaneous attempts reuse one request and a late failed source does not erase a newer source',async()=>{
+ const pending={};let calls=0;const ui=exchangeUI(url=>{calls++;return new Promise((resolve,reject)=>pending[new URL(url,'http://local').searchParams.get('source')]={resolve,reject});});
+ const field=ui.addRow('USD');const a=ui.ctx.load(),b=ui.ctx.load();assert.equal(calls,1);
+ ui.elements.useBoiRates.checked=false;const c=ui.ctx.load();pending.priority.resolve({date:'2026-10-20',source:'priority',rates:{USD:{rate:3.1,rateDate:'2026-10-19'}}});await c;
+ pending.boi.reject(new Error('offline'));await Promise.all([a,b]);assert.equal(Number(field.value),3.1);assert.equal(ui.elements.retryExchangeRates.hidden,true);
 });
