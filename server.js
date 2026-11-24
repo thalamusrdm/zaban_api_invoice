@@ -43,6 +43,21 @@ const digital = require('./digital-invoice');
 const delivery = digital.workflowStore(path.join(__dirname, 'data', 'delivery'));
 const mailer = require('./invoice-mail').createMailer(process.env);
 const { randomUUID, createHash } = require('node:crypto');
+const closer = require('./invoice-close').invoiceCloser({
+  priority, store:delivery, keyFor:digital.keyFor, base:API_BASE, user:USER,
+  close:ivnum => sdk.closeInvoice(ivnum, log),
+  async preflight(inv, context) {
+    if (context?.originalDownload) await handlers['POST /api/invoices/original-download-preflight'](null, {
+      custname:context.custname, sendOriginalEmail:context.sendOriginalEmail, email:context.email, consent:!!context.consentAt,
+    });
+    if (context?.digitalEmail) {
+      const profile = await sdk.digitalCustomerForm(context.custname);
+      if (!profile.digital || profile.email !== context.email) throw badRequest('פרטי המייל בפריוריטי השתנו. יש לתקן אותם לפני הסגירה.');
+      await sdk.prepareDigitalInvoice(inv.IVNUM, context.custname);
+    }
+  },
+  prepareOriginal:ivnum => handlers['POST /api/invoices/prepare-original-download'](null, {ivnum}),
+});
 
 function log(entry) {
   const line = JSON.stringify({ ts: new Date().toISOString(), ...entry });
@@ -307,48 +322,8 @@ const handlers = {
 
   // סגירת חשבונית: טיוטה (T...) -> סופית (IN...).
   // OData לא מריץ את פעולת הסגירה, ולכן היא רצה דרך Priority Web SDK (ראו priority-sdk.js).
-  'POST /api/invoices/close': async (_q, body) => {
-    const ivnum = (body?.ivnum || '').trim();
-    if (!ivnum) throw badRequest('חסר מספר חשבונית');
-
-    // מזהה פנימי (IV) לפני הסגירה — כדי לאתר את המספר הסופי החדש אחריה
-    const key = `AINVOICES(IVNUM='${odataStr(ivnum)}',IVTYPE='A',DEBIT='D')`;
-    const before = await priority('GET', `${key}?$select=IV,STATDES`);
-    if (before.STATDES !== 'טיוטא') throw badRequest(`חשבונית ${ivnum} אינה טיוטה (סטטוס: ${before.STATDES})`);
-
-    const digitalContext = await delivery.read(digital.keyFor(API_BASE,before.IV));
-    if(digitalContext?.originalDownload) await handlers['POST /api/invoices/original-download-preflight'](null, { custname: digitalContext.custname, sendOriginalEmail: digitalContext.sendOriginalEmail, email: digitalContext.email, consent: !!digitalContext.consentAt });
-    if(digitalContext?.digitalEmail){
-      const profile=await sdk.digitalCustomerForm(digitalContext.custname);
-      if(!profile.digital || profile.email!==digitalContext.email)throw badRequest('פרטי המייל בפריוריטי השתנו. יש לתקן אותם לפני הסגירה.');
-      await sdk.prepareDigitalInvoice(ivnum,digitalContext.custname);
-    }
-    // מריצים את הסגירה; גם אם ה-SDK נכשל (למשל בשלב שליחת מייל אחרי הסגירה),
-    // המצב בפועל נקבע לפי מה שקרה לחשבונית עצמה
-    let result = null, sdkError = null;
-    try {
-      result = await sdk.closeInvoice(ivnum, log);
-    } catch (err) {
-      sdkError = err.message || String(err);
-    }
-
-    // איתור החשבונית אחרי הסגירה לפי המזהה הפנימי
-    const after = await priority('GET', `AINVOICES?$select=IVNUM,STATDES,TOTPRICE&$filter=${encodeURIComponent(`IV eq ${before.IV}`)}`);
-    const inv = after?.value?.[0];
-    if (inv && !(inv.IVNUM === ivnum && inv.STATDES === 'טיוטא')) {
-      // נסגרה בפועל — הצלחה, גם אם היה כשל בשלב משני של הפרוצדורה (מייל/הדפסה)
-      return { ivnum: inv.IVNUM, status: inv.STATDES, originalDownload:!!digitalContext?.originalDownload, digitalEmail:!!digitalContext?.digitalEmail, sendOriginalEmail:!!digitalContext?.sendOriginalEmail, email:digitalContext?.email };
-    }
-    if (!inv) throw Object.assign(new Error('לא ניתן לאמת את הסגירה בפריוריטי. החשבונית כבר נוצרה; יש לבדוק את מצבה לפני ניסיון נוסף.'), { status: 502 });
-
-    // עדיין טיוטה — כישלון אמיתי; מציגים את ההודעה של פריוריטי כפי שהיא
-    const why = [
-      ...(result?.messages || []),
-      ...(result?.formMessages || []),
-      ...(sdkError ? [sdkError] : []),
-    ].join('\n');
-    throw badRequest('סגירת החשבונית נכשלה: ' + (why || 'החשבונית עדיין טיוטה — יש לבדוק בפריוריטי'));
-  },
+  'POST /api/invoices/close': async (_q, body) => closer.run(String(body?.ivnum || '').trim()),
+  'GET /api/invoices/close-status': async q => closer.status(String(q.get('ivnum') || '').trim()),
 
   // הורדת מסמך החשבונית (PDF): מפיקים דרך ה-SDK ומזרימים ללקוח
   'GET /api/customers/digital': async q => {
@@ -385,38 +360,49 @@ const handlers = {
   },
   'GET /api/invoices/signature-copy': async q => {
     const ivnum=String(q.get('ivnum')||'');const inv=await ownedInvoice(ivnum);
-    const record=await delivery.once(inv.workflowKey,'copy',async()=>{
-      const buffer=await copyBytes(ivnum);await delivery.saveFile(inv.workflowKey,'copy',buffer);
-      return {token:randomUUID(),ivnum,custname:inv.CUSTNAME,sha256:createHash('sha256').update(buffer).digest('hex'),at:new Date().toISOString()};
+    const {__file:{buffer}}=await handlers['GET /api/invoices/existing-original'](q);
+    const sha256=createHash('sha256').update(buffer).digest('hex');
+    const record=await delivery.once(inv.workflowKey,'signature-source',async()=>{
+      await delivery.saveFile(inv.workflowKey,'signature-source',buffer);
+      return {token:randomUUID(),ivnum,iv:inv.IV,custname:inv.CUSTNAME,sha256,at:new Date().toISOString(),declaration:digital.SIGNATURE_DECLARATION};
     });
-    return {__file:{buffer:await delivery.readFile(inv.workflowKey,'copy'),contentType:'application/pdf',filename:ivnum+'-copy.pdf',headers:{'X-Signature-Token':record.token}}};
+    if(record.sha256!==sha256 || record.iv!==inv.IV || record.custname!==inv.CUSTNAME)throw badRequest('קובץ המקור השתנה מאז פתיחת תהליך החתימה. נדרשת בדיקה.');
+    return {__file:{buffer,contentType:'application/pdf',filename:ivnum+'-original.pdf',headers:{'X-Signature-Token':record.token}}};
   },
   'POST /api/invoices/sign': async (_q,body) => {
     const ivnum=String(body?.ivnum||'');const inv=await ownedInvoice(ivnum);
-    const copy=await delivery.read(inv.workflowKey,'copy');
-    if(copy?.status!=='complete' || copy.result.token!==body.token)throw badRequest('יש לפתוח תחילה את העתק החשבונית בממשק החתימה');
+    const copy=await delivery.read(inv.workflowKey,'signature-source');
+    if(copy?.status!=='complete' || copy.result.token!==body.token || copy.result.iv!==inv.IV || copy.result.custname!==inv.CUSTNAME)throw badRequest('יש לפתוח תחילה את מקור החשבונית בממשק החתימה');
+    if(body.acknowledgement!==true)throw badRequest('יש לאשר שהחתימה מתייחסת לחשבונית המוצגת');
     const mailState=await delivery.read(inv.workflowKey,'mail');
     if(mailState?.status==='started')throw Object.assign(new Error('משלוח המקור עדיין מתבצע. יש להמתין לפני צירוף החתימה.'),{status:409});
     const png=digital.signatureImage(body.signature);
     const signer=String(body.signer||'').trim();
-    const payloadHash=createHash('sha256').update(png).update(signer).digest('hex');
-    const prior=await delivery.read(inv.workflowKey,'signature');
+    const payloadHash=createHash('sha256').update(JSON.stringify({source:copy.result.sha256,signer,declaration:copy.result.declaration})).update(png).digest('hex');
+    const prior=await delivery.read(inv.workflowKey,'signature-receipt');
     if(prior?.payloadHash && prior.payloadHash!==payloadHash)throw badRequest('לחשבונית זו כבר נשמר ניסיון חתימה אחר; נדרשת בדיקה');
-    const descriptor='SIGNED_'+ivnum+'_'+payloadHash.slice(0,10);
+    const descriptor='ACK_'+ivnum+'_'+payloadHash.slice(0,10);
     const attachmentPath=`AINVOICES(IVNUM='${odataStr(ivnum)}',IVTYPE='A',DEBIT='D')/EXTFILES_SUBFORM`;
+    const original=await delivery.readFile(inv.workflowKey,'signature-source');
+    const {__file:{buffer:currentOriginal}}=await handlers['GET /api/invoices/existing-original']({get:key=>key==='ivnum'?ivnum:null});
+    if(createHash('sha256').update(original).digest('hex')!==copy.result.sha256 || !currentOriginal.equals(original))throw badRequest('קובץ המקור השתנה. שמירת החתימה נחסמה.');
     // Reconcile a timed-out upload by its deterministic descriptor before any retry.
-    const existing=await priority('GET',attachmentPath+`?$select=EXTFILENUM,EXTFILEDES&$filter=EXTFILEDES eq '${descriptor}'`);
-    if(existing.value?.length){const result={attached:true,ivnum,attachment:existing.value[0].EXTFILENUM};await delivery.write(inv.workflowKey,'attachment',{status:'complete',result});return result;}
+    const existing=await priority('GET',attachmentPath+`?$select=EXTFILENUM,EXTFILEDES,EXTFILENAME&$filter=EXTFILEDES eq '${descriptor}'`);
+    if(existing.value?.length){
+      if(existing.value.length!==1 || !prior)throw badRequest('לא ניתן לאמת אישור חתימה קיים; נדרשת בדיקה');
+      const saved=await delivery.readFile(inv.workflowKey,'receipt');
+      if(existing.value[0].EXTFILENAME!=='data:application/pdf;base64,'+saved.toString('base64'))throw badRequest('אישור החתימה בנספחים אינו תואם לקובץ שנשמר');
+      const result={attached:true,ivnum,attachment:existing.value[0].EXTFILENUM,payloadHash};await delivery.write(inv.workflowKey,'receipt-attachment',{status:'complete',result});return result;
+    }
+    if((await delivery.read(inv.workflowKey,'receipt-attachment'))?.status==='complete')throw badRequest('אישור החתימה שנשמר קודם אינו נמצא בנספחים. נדרשת בדיקה לפני שמירה נוספת.');
     const signedAt=prior?.signedAt||new Date().toISOString();
-    const original=await delivery.readFile(inv.workflowKey,'copy');
-    if(createHash('sha256').update(original).digest('hex')!==copy.result.sha256)throw badRequest('עותק החשבונית השתנה. השמירה נחסמה.');
-    const buffer=await digital.signedCopy(original,png,{ivnum,custname:inv.CUSTNAME,signer,signedAt});
-    const result=await delivery.once(inv.workflowKey,'attachment',async()=>{
-      if(!prior){await delivery.write(inv.workflowKey,'signature',{payloadHash,signer,signedAt,copyHash:copy.result.sha256,descriptor});await delivery.saveFile(inv.workflowKey,'signed',buffer);}
-      const saved=await delivery.readFile(inv.workflowKey,'signed');
+    const buffer=await digital.signatureReceipt(original,png,{ivnum,iv:inv.IV,custname:inv.CUSTNAME,signer,signedAt});
+    const result=await delivery.once(inv.workflowKey,'receipt-attachment',async()=>{
+      if(!prior){await delivery.write(inv.workflowKey,'signature-receipt',{payloadHash,signer,signedAt,sourceHash:copy.result.sha256,sourceBytes:original.length,iv:inv.IV,custname:inv.CUSTNAME,declaration:copy.result.declaration,descriptor});await delivery.saveFile(inv.workflowKey,'receipt',buffer);}
+      const saved=await delivery.readFile(inv.workflowKey,'receipt');
       await priority('POST',attachmentPath,{EXTFILEDES:descriptor,EXTFILENAME:'data:application/pdf;base64,'+saved.toString('base64'),SUFFIX:'.pdf'});
-      const confirm=await priority('GET',attachmentPath+`?$select=EXTFILENUM,EXTFILEDES&$filter=EXTFILEDES eq '${descriptor}'`);
-      if(!confirm.value?.length)throw Error('לא ניתן לאמת את הנספח בפריוריטי. אין לצרף שוב לפני בירור.');
+      const confirm=await priority('GET',attachmentPath+`?$select=EXTFILENUM,EXTFILEDES,EXTFILENAME&$filter=EXTFILEDES eq '${descriptor}'`);
+      if(confirm.value?.length!==1 || confirm.value[0].EXTFILENAME!=='data:application/pdf;base64,'+saved.toString('base64'))throw Error('לא ניתן לאמת את אישור החתימה בפריוריטי ללא שינוי. אין לצרף שוב לפני בירור.');
       return {attached:true,ivnum,attachment:confirm.value[0].EXTFILENUM,payloadHash};
     });
     if(result.payloadHash && result.payloadHash!==payloadHash)throw badRequest('כבר נשמרה חתימה אחרת לחשבונית זו');
@@ -428,14 +414,15 @@ const handlers = {
     const ivnum = String(q.get('ivnum') || '').trim();
     await ownedInvoice(ivnum);
     const attachments = await priority('GET', `AINVOICES(IVNUM='${odataStr(ivnum)}',IVTYPE='A',DEBIT='D')/EXTFILES_SUBFORM?$select=EXTFILENUM,EXTFILEDES,EXTFILENAME`);
-    const copies = (attachments.value || []).filter(row => String(row.EXTFILEDES || '').trim().startsWith('SIGNED_' + ivnum + '_'));
+    const receipts = (attachments.value || []).filter(row => String(row.EXTFILEDES || '').trim().startsWith('ACK_' + ivnum + '_'));
+    const copies = receipts.length ? receipts : (attachments.value || []).filter(row => String(row.EXTFILEDES || '').trim().startsWith('SIGNED_' + ivnum + '_'));
     if (!copies.length) throw Object.assign(new Error('לא נמצא העתק חתום בנספחי חשבונית ' + ivnum + ' בפריוריטי.'), {status:404});
     if (copies.length !== 1) throw badRequest('נמצאו כמה העתקים חתומים. יש לבחור את המסמך המתאים בנספחי החשבונית בפריוריטי.');
     const match = String(copies[0].EXTFILENAME || '').match(/^data:application\/pdf;base64,([A-Za-z0-9+/=\r\n]+)$/);
     if (!match) throw badRequest('ההעתק החתום לא הוחזר כקובץ PDF תקין מפריוריטי.');
     const buffer = Buffer.from(match[1], 'base64');
     if (buffer.subarray(0,5).toString() !== '%PDF-') throw badRequest('הנספח החתום אינו קובץ PDF תקין.');
-    return {__file:{buffer,contentType:'application/pdf',filename:ivnum + '-signed.pdf'}};
+    return {__file:{buffer,contentType:'application/pdf',filename:ivnum + (receipts.length ? '-signature-receipt.pdf' : '-signed.pdf')}};
   },
 
   // Download the existing original only; no printing, generation or email.
@@ -633,6 +620,7 @@ const handlers = {
         const inv = await priority('POST', 'AINVOICES?$expand=AINVOICEITEMS_SUBFORM', payload);
         if (!inv.IV) throw Error('הטיוטה נוצרה אך חסר מזהה פנימי; יש לבדוק בפריוריטי ולא להפיק שוב');
         await delivery.write(digital.keyFor(API_BASE, inv.IV), 'context', { originalDownload: true, ...mailContext, custname: payload.CUSTNAME, createdDraft: inv.IVNUM, requestId });
+        await closer.remember(inv);
         return { ivnum: inv.IVNUM, status: inv.STATDES, beforeVat: inv.QPRICE, vat: inv.VAT, total: inv.TOTPRICE, originalDownload: true, sendOriginalEmail: !!mailContext.sendOriginalEmail, email: mailContext.email };
       });
     }
@@ -648,6 +636,7 @@ const handlers = {
       const inv=await priority('POST','AINVOICES?$expand=AINVOICEITEMS_SUBFORM',payload);
       if(!inv.IV)throw Error('הטיוטה נוצרה אך חסר מזהה פנימי; יש לבדוק בפריוריטי ולא להפיק שוב');
       await delivery.write(digital.keyFor(API_BASE,inv.IV),'context',{digitalEmail:true,consentAt:new Date().toISOString(),custname:recipient.custname,email:recipient.email,createdDraft:inv.IVNUM,requestId});
+      await closer.remember(inv);
       let prepared=true,preparationError;
       try{await sdk.prepareDigitalInvoice(inv.IVNUM,recipient.custname);}catch(e){prepared=false;preparationError=e.message;}
       return {ivnum:inv.IVNUM,status:inv.STATDES,beforeVat:inv.QPRICE,vat:inv.VAT,total:inv.TOTPRICE,digitalEmail:true,email:recipient.email,prepared,preparationError};

@@ -21,7 +21,7 @@ let openSignedInvoice;
     const currentRequest = ++request;
     clearDocument();
     status.removeAttribute('data-state');
-    document.getElementById('signedCopyTitle').textContent = 'העתק חתום · ' + ivnum;
+    document.getElementById('signedCopyTitle').textContent = 'אישור חתימה / העתק חתום · ' + ivnum;
     status.textContent = 'טוען את ההעתק החתום מהנספחים בפריוריטי…';
     if (!dialog.open) dialog.showModal();
     if (button) button.disabled = true;

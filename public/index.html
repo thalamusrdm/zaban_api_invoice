@@ -353,12 +353,13 @@
     </section>
     <section id="signatureDialog" class="flow-panel signature-step" aria-labelledby="signatureTitle" hidden>
       <h2 id="signatureTitle" tabindex="-1">חתימת לקוח</h2>
-      <p class="step-intro">עיינו בהעתק, הזינו שם וחתמו. המסמך החתום יישמר בנספחי אותה חשבונית בפריוריטי.</p>
+      <p class="step-intro">עיינו במקור החשבונית, הזינו שם וחתמו. אישור החתימה יישמר בנפרד בנספחי החשבונית, והמקור יישאר ללא שינוי.</p>
       <div class="signature-workspace">
-      <div class="signature-document"><iframe id="signaturePdf" title="העתק החשבונית לחתימת הלקוח"></iframe>
-      <p><a id="signatureCopyLink" target="_blank" rel="noopener">פתיחת ההעתק בחלון נפרד</a></p>
+      <div class="signature-document"><iframe id="signaturePdf" title="מקור החשבונית לעיון לפני חתימה"></iframe>
+      <p><a id="signatureCopyLink" target="_blank" rel="noopener">פתיחת המקור בחלון נפרד</a></p>
       </div><div class="signature-entry">
       <label for="signatureName">שם החותם</label><input id="signatureName" maxlength="80" autocomplete="name">
+      <label class="checkbox-label"><input id="signatureConsent" type="checkbox"> עיינתי בחשבונית המוצגת ואני מאשר/ת כי חתימתי מתייחסת אליה.</label>
       <label for="signatureCanvas" class="signature-label">חתימת הלקוח על המסך</label>
       <canvas id="signatureCanvas" width="640" height="180" aria-label="אזור חתימת הלקוח"></canvas>
       <div class="signature-actions"><button type="button" id="clearSignature">ניקוי חתימה</button></div>
@@ -367,7 +368,7 @@
       <button type="button" id="closeSignature" class="signature-finish">חשבונית נוספת</button>
     </section>
     <p id="stepStatus" tabindex="-1" class="step-error" role="alert" hidden></p>
-    <div class="flow-actions"><button type="button" id="previousStep" hidden>חזרה</button><div class="footer-context"><span id="stepCount" aria-live="polite">שלב 1 מתוך 4</span><span id="footerAmount"></span></div><button type="button" id="nextStep">המשך למוצרים</button><button type="submit" id="submit" hidden>הפקה והמשך לחתימה</button><button type="button" id="saveSignature" hidden disabled>שמירת המסמך החתום בנספחים</button></div>
+    <div class="flow-actions"><button type="button" id="previousStep" hidden>חזרה</button><div class="footer-context"><span id="stepCount" aria-live="polite">שלב 1 מתוך 4</span><span id="footerAmount"></span></div><button type="button" id="nextStep">המשך למוצרים</button><button type="submit" id="submit" hidden>הפקה והמשך לחתימה</button><button type="button" id="saveSignature" hidden disabled>שמירת אישור החתימה בנספחים</button></div>
     <div class="msg" id="msg" role="status" aria-live="polite" tabindex="-1"></div>
     <div class="msg" id="documentMsg" tabindex="-1" role="status" aria-live="polite"></div>
   </form>
@@ -1195,6 +1196,8 @@ $('form').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = $('submit');
   if (btn.disabled) return;
+  const pendingClose = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('zabanPendingClose');
+  if (pendingClose) { await closeInvoice(pendingClose, null, false); return; }
   if (!await validateProductSelections() || btn.disabled) return;
   msg.className = 'msg';
   $('documentMsg').className = 'msg';
@@ -1266,9 +1269,7 @@ $('form').addEventListener('submit', async e => {
       `✔ נוצרה טיוטה <span class="big num-ltr">${escapeHtml(data.ivnum)}</span> · סוגר לחשבונית סופית…\n` +
       `לפני מע"מ: ${fmt(data.beforeVat)} · מע"מ: ${fmt(data.vat)} · <b>סה"כ: ${fmt(data.total)}</b>\n` +
       '');
-    // איפוס שורות לקראת החשבונית הבאה
-    tbody.innerHTML = ''; addLine(); $('details').value = ''; recalc();
-    if (typeof resetInvoiceFlow === 'function') resetInvoiceFlow();
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('zabanPendingClose', data.ivnum);
     if(data.prepared===false){showMsg('warn','הטיוטה '+escapeHtml(data.ivnum)+' נוצרה, אך פרטי המשלוח לא אומתו: '+escapeHtml(data.preparationError||'')+' — אין להפיק שוב. אפשר לנסות לסגור את אותה טיוטה. <button type="button" class="close-btn" data-iv="'+escapeHtml(data.ivnum)+'">ניסיון סגירה חוזר</button>');return;}
     btn.textContent = 'סוגר ושומר את המקור…';
     if (typeof InvoiceProgress !== 'undefined') InvoiceProgress.update('closing');
@@ -1298,7 +1299,7 @@ function renderRecentInvoices(rows, scope, startIndex = 0, itemsOnly = false) {
         ${scope === 'agent' ? `<p class="recent-reference">לקוח ${escapeHtml(r.CDES || '')} <bdi>${escapeHtml(r.CUSTNAME || '')}</bdi></p>` : ''}
         ${r.DETAILS ? `<p class="recent-reference">פרטים: ${escapeHtml(r.DETAILS)}</p>` : ''}
         <div class="recent-actions" role="group" aria-label="פעולות לחשבונית ${ivnum}">
-          ${draft ? `<button type="button" class="close-btn recent-primary" data-iv="${ivnum}"${disabled}>סגירה לחשבונית סופית</button>` : `<button type="button" class="close-btn signed-copy-btn recent-primary" data-iv="${ivnum}"${disabled}>העתק חתום</button><button type="button" class="close-btn sign-btn" data-iv="${ivnum}"${disabled}>פתיחה וחתימה</button><button type="button" class="close-btn resend-btn" data-iv="${ivnum}"${disabled}>שליחה חוזרת למייל</button>`}
+          ${draft ? `<button type="button" class="close-btn recent-primary" data-iv="${ivnum}"${disabled}>סגירה לחשבונית סופית</button>` : `<button type="button" class="close-btn signed-copy-btn recent-primary" data-iv="${ivnum}"${disabled}>אישור חתימה / העתק חתום</button><button type="button" class="close-btn sign-btn" data-iv="${ivnum}"${disabled}>פתיחה וחתימה</button><button type="button" class="close-btn resend-btn" data-iv="${ivnum}"${disabled}>שליחה חוזרת למייל</button>`}
           <details class="invoice-more"><summary>אפשרויות נוספות</summary><div class="invoice-more-actions"><button type="button" class="close-btn dl-btn" data-iv="${ivnum}"${disabled}>הורדת העתק PDF</button>${draft ? '' : `<button type="button" class="close-btn dl-btn" data-kind="original" data-iv="${ivnum}"${disabled}>הורדת מקור</button>`}</div></details>
         </div>
         ${disabled ? '<p class="field-note">פעולות המסמכים זמינות רק לחשבוניות שבטיפול משתמש המערכת.</p>' : ''}
@@ -1390,26 +1391,52 @@ loadAgentRecent();
 
 // ---------- סגירת חשבונית (טיוטה -> סופית IN) ----------
 async function closeInvoice(ivnum, btn, confirmFirst = true) {
+  const pendingNumber = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('zabanPendingClose');
+  if (pendingNumber && pendingNumber !== ivnum) {
+    showMsg('warn', 'החשבונית ' + escapeHtml(pendingNumber) + ' עדיין בטיפול. יש להשלים אותה לפני מעבר לחשבונית נוספת.');
+    return;
+  }
   if (confirmFirst && !confirm(`לסגור את חשבונית ${ivnum}?\nהחשבונית תהפוך לסופית (מספר IN) — פעולה שאי אפשר לבטל.`)) return;
   const documentKind = 'original';
   const agentNotice = btn?.closest?.('#agentRecentBody') ? $('agentDocumentStatus') : null;
   if (agentNotice) { agentNotice.className = 'msg show'; agentNotice.textContent = 'סוגר את חשבונית ' + ivnum + '…'; }
   if (btn) { btn.disabled = true; btn.textContent = 'סוגר…'; }
+  if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('zabanPendingClose', ivnum);
   try {
-    const data = await api('/api/invoices/close', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ivnum }),
-    });
+    let data;
+    try {
+      data = await api('/api/invoices/close', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ivnum }),
+        signal: typeof AbortSignal !== 'undefined' ? AbortSignal.timeout(45000) : undefined,
+      });
+    } catch (closeError) {
+      showMsg('warn', 'בודק בפריוריטי אם החשבונית כבר נסגרה וממשיך מאותו מסמך…');
+      for (let attempt = 0; attempt < 4; attempt++) {
+        let state;
+        try { state = await api('/api/invoices/close-status?ivnum=' + encodeURIComponent(ivnum)); }
+        catch { if (attempt === 3) throw closeError; }
+        if (state?.closed) { data = state; break; }
+        if (state && !state.pending) throw closeError;
+        if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      if (!data) throw closeError;
+    }
+    if (data.status !== 'סופית' || !String(data.ivnum || '').startsWith('IN')) throw Error('לא התקבל אישור לחשבונית סופית. אין להפיק שוב.');
+    if (!btn) {
+      tbody.innerHTML = ''; addLine(); $('details').value = ''; recalc();
+      if (typeof resetInvoiceFlow === 'function') resetInvoiceFlow();
+    }
     if (agentNotice) { agentNotice.className = 'msg show ok'; agentNotice.textContent = 'החשבונית נסגרה: ' + data.ivnum + '. פעולות המסמכים זמינות ברשימה המעודכנת.'; }
     showMsg('ok', `✔ החשבונית נסגרה: <b class="num-ltr">${data.ivnum}</b>${data.status ? ' · ' + data.status : ''}\nהמקור יורד רק בלחיצה על כפתור ההורדה. <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="${documentKind}" style="margin-top:6px">הורדת מקור</button> <button type="button" class="close-btn dl-btn" data-iv="${data.ivnum}" data-kind="copy">הורדת העתק</button>`);
     // Preparation and signing stay inside the app; document downloads require a click.
-    if(data.originalDownload)await finishOriginalDownload(data);
+    let ready = true;
+    if(data.originalDownload) ready = await finishOriginalDownload(data);
     else if(data.digitalEmail)await finishDigitalInvoice(data);
     else {
       $('documentMsg').className = 'msg show ok';
       $('documentMsg').textContent = 'החשבונית סופית. ניתן להוריד מסמך באמצעות כפתורי ההורדה.';
     }
+    if (ready !== false && typeof sessionStorage !== 'undefined' && sessionStorage.getItem('zabanPendingClose') === ivnum) sessionStorage.removeItem('zabanPendingClose');
   } catch (err) {
     if (agentNotice) { agentNotice.className = 'msg show warn'; agentNotice.textContent = 'סגירת חשבונית ' + ivnum + ' לא אומתה: ' + err.message + '. אין להפיק אותה שוב; יש לבדוק את מצבה בפריוריטי.'; }
     showMsg('warn', `החשבונית <b class="num-ltr">${escapeHtml(ivnum)}</b> כבר נוצרה, אך הסגירה לא אומתה: ${escapeHtml(err.message)}\nאין להפיק אותה שוב. אפשר לבדוק בפריוריטי או לנסות לסגור את אותה טיוטה.\n<button type="button" class="close-btn" data-iv="${escapeHtml(ivnum)}">ניסיון סגירה חוזר</button>`);
@@ -1490,8 +1517,9 @@ document.addEventListener('click', e => {
 <script src="/invoice-flow.js"></script>
 <script src="/invoice-progress.js"></script>
 <script src="/signature.js"></script>
+<script src="/invoice-close-recovery.js"></script>
 <dialog id="signedCopyDialog" class="signed-copy-viewer" aria-labelledby="signedCopyTitle" dir="rtl">
-  <div class="signed-copy-heading"><h2 id="signedCopyTitle">העתק חתום</h2><button type="button" id="closeSignedCopy">סגירה</button></div>
+  <div class="signed-copy-heading"><h2 id="signedCopyTitle">אישור חתימה / העתק חתום</h2><button type="button" id="closeSignedCopy">סגירה</button></div>
   <p id="signedCopyStatus" role="status" aria-live="polite"></p>
   <iframe id="signedCopyPdf" title="ההעתק החתום שנשמר בפריוריטי" hidden></iframe>
   <a id="signedCopyLink" target="_blank" rel="noopener" hidden>פתיחת ההעתק החתום בחלון נפרד</a>

@@ -98,4 +98,43 @@ async function signedCopy(copy, png, {ivnum,custname,signer,signedAt}) {
   return Buffer.from(await doc.save());
 }
 
-module.exports={emailAddress,digitalConsent,keyFor,workflowStore,signatureImage,signedCopy};
+const SIGNATURE_DECLARATION = 'עיינתי בחשבונית המוצגת ואני מאשר/ת כי חתימתי מתייחסת אליה.';
+async function signatureReceipt(original, png, {ivnum,iv,custname,signer,signedAt}) {
+  if (!/^IN\d+$/.test(ivnum) || !Number.isSafeInteger(iv) || !custname || typeof signer !== 'string' || !signer.trim() || signer.length > 80 || /[\x00-\x1f\u202a-\u202e\u2066-\u2069]/.test(signer) || !Number.isFinite(Date.parse(signedAt))) throw inputError('חסרים פרטי החותם או החשבונית');
+  const sha256=createHash('sha256').update(original).digest('hex');
+  const doc=await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  const font=await doc.embedFont(await fs.readFile(path.join(__dirname,'public','fonts','NotoSansHebrew-Regular.ttf')),{subset:true});
+  const latin=await doc.embedFont(StandardFonts.Helvetica);
+  const supported=new Set(font.getCharacterSet());
+  const latinSupported=new Set(latin.getCharacterSet());
+  const page=doc.addPage([595,842]);
+  function rtl(text,y,size=12) {
+    const visual=bidi.getReorderedString(text,bidi.getEmbeddingLevels(text,'rtl'));
+    const chars=Array.from(visual).map(char=>{const selected=supported.has(char.codePointAt(0))?font:latinSupported.has(char.codePointAt(0))?latin:null;if(!selected)throw inputError('שם החותם מכיל תו שאינו נתמך');return {char,font:selected};});
+    const width=chars.reduce((sum,g)=>sum+g.font.widthOfTextAtSize(g.char,size),0);
+    const actual=Math.min(size,size*490/Math.max(width,1));
+    let x=545-chars.reduce((sum,g)=>sum+g.font.widthOfTextAtSize(g.char,actual),0);
+    for(const g of chars){page.drawText(g.char,{x,y,size:actual,font:g.font});x+=g.font.widthOfTextAtSize(g.char,actual);}
+  }
+  rtl('אישור חתימת לקוח על חשבונית',780,20);
+  rtl('חשבונית: '+ivnum,735);rtl('מספר לקוח: '+custname,709);
+  rtl('שם החותם: '+signer.trim(),668);
+  const date=new Intl.DateTimeFormat('he-IL',{timeZone:'Asia/Jerusalem',dateStyle:'short',timeStyle:'medium'}).format(new Date(signedAt));
+  rtl('מועד החתימה: '+date+' (שעון ישראל)',639);
+  rtl(SIGNATURE_DECLARATION,594,11);
+  rtl('חתימת הלקוח',550);
+  const image=await doc.embedPng(png),scaled=image.scaleToFit(450,120);
+  page.drawImage(image,{x:545-scaled.width,y:400,width:scaled.width,height:scaled.height});
+  rtl('אישור זה מקושר לקובץ המקור שהוצג לחותם.',355,11);
+  rtl('זהו אישור נפרד; קובץ מקור החשבונית נשמר ללא שינוי.',330,11);
+  page.drawText('Source SHA-256:',{x:50,y:280,size:10,font:latin});
+  page.drawText(sha256,{x:50,y:260,size:9,font:latin});
+  page.drawText('Invoice IV: '+iv+' | Source bytes: '+original.length,{x:50,y:235,size:10,font:latin});
+  page.drawText('Signed at (UTC): '+new Date(signedAt).toISOString(),{x:50,y:212,size:10,font:latin});
+  doc.setTitle('אישור חתימת לקוח '+ivnum);
+  doc.setSubject('שם החותם: '+signer.trim());
+  doc.setKeywords(['signature-receipt-v1',ivnum,sha256]);
+  return Buffer.from(await doc.save());
+}
+module.exports={emailAddress,digitalConsent,keyFor,workflowStore,signatureImage,signedCopy,signatureReceipt,SIGNATURE_DECLARATION};

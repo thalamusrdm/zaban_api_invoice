@@ -45,7 +45,7 @@ Copy-Item -LiteralPath (Join-Path $nodeRoot 'LICENSE') -Destination (Join-Path $
 }
 $runtimeHash = (Get-FileHash -LiteralPath (Join-Path $runtimeDir 'node.exe') -Algorithm SHA256).Hash
 
-$files = @('server.js', 'digital-invoice.js', 'invoice-mail.js', 'n8n-mail.js', 'signature-fields.js', 'original-documents.js', 'priority-sdk.js', 'invoice-payload.js', 'exchange-rates.js', 'gold-rates.js', 'package.json', 'package-lock.json', 'start-server.bat', '.env.example')
+$files = @('server.js', 'invoice-close.js', 'digital-invoice.js', 'invoice-mail.js', 'n8n-mail.js', 'signature-fields.js', 'original-documents.js', 'priority-sdk.js', 'invoice-payload.js', 'exchange-rates.js', 'gold-rates.js', 'package.json', 'package-lock.json', 'start-server.bat', '.env.example')
 foreach ($file in $files) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $appRoot }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'public') -Destination $appRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination $appRoot
@@ -74,7 +74,7 @@ Push-Location $appRoot
 try {
     & npm.cmd ci --omit=dev --ignore-scripts --no-audit --no-fund --prefer-offline --fetch-retries=0 --fetch-timeout=20000
     if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
-    & (Join-Path $runtimeDir 'node.exe') -e "require('priority-web-sdk'); require('./gold-rates'); require('./exchange-rates'); require('./digital-invoice'); require('./invoice-mail'); require('./n8n-mail'); if(!require('fs').existsSync('public/fonts/NotoSansHebrew-Regular.ttf')) throw Error('Hebrew signature font missing'); console.log('Portable modules OK')"
+    & (Join-Path $runtimeDir 'node.exe') -e "require('priority-web-sdk'); require('./invoice-close'); require('./gold-rates'); require('./exchange-rates'); require('./digital-invoice'); require('./invoice-mail'); require('./n8n-mail'); if(!require('fs').existsSync('public/fonts/NotoSansHebrew-Regular.ttf')) throw Error('Hebrew signature font missing'); console.log('Portable modules OK')"
     if ($LASTEXITCODE -ne 0) { throw 'Portable runtime verification failed' }
 } finally { Pop-Location }
 

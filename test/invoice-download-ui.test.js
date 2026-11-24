@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
-function workflow({closeError,downloadError,waitClose,digitalMode=false,downloadMode=false,sendOriginalEmail=false,consented=true,email='agent@example.com',preflightError,mailError}={}) {
+function workflow({closeError,closeState,downloadError,waitClose,digitalMode=false,downloadMode=false,sendOriginalEmail=false,consented=true,email='agent@example.com',preflightError,mailError}={}) {
   const calls=[],messages=[],anchors=[],timers=[],progress=[],bodies=[]; let submit;
   const button={disabled:false,textContent:'הפקה והמשך לחתימה'};
   const retry={disabled:false,textContent:'הורדת מקור'};
@@ -15,7 +15,7 @@ function workflow({closeError,downloadError,waitClose,digitalMode=false,download
   const msg={className:'',querySelector(){return retry;}};
   class TestURL extends URL { static createObjectURL(){return 'blob:test';} static revokeObjectURL(){} }
   const ctx={validateProductSelections:async()=>true,InvoiceProgress:{show:stage=>progress.push('show:'+stage),update:stage=>progress.push(stage),hide:()=>progress.push('hide')},msg,$:id=>fields[id],async finishOriginalDownload(data){calls.push('original-finish:'+data.ivnum);},async finishDigitalInvoice(data){calls.push('digital-finish:'+data.ivnum);},readLines:()=>[{partname:'14',price:78.36,exchange:3.11}],tbody:{innerHTML:''},addLine(){},recalc(){},loadRecent(){},escapeHtml:String,fmt:String,confirm(){throw new Error('Unexpected confirmation in authorized one-click flow');},
-    async api(url,opts){calls.push(url);if(opts?.body)bodies.push({url,body:JSON.parse(opts.body)});if(url.endsWith('/email-original')){if(mailError)throw Error(mailError);return {acceptedByMailServer:true,email};}if(url.includes('/original-download-preflight')){if(preflightError)throw Error(preflightError);return {ok:true};}if(url.includes('/check'))return {value:[]};if(url.endsWith('/close')){if(waitClose)await waitClose;if(closeError)throw new Error(closeError);return {ivnum:'IN-TEST',status:'סופית',originalDownload:downloadMode,digitalEmail:digitalMode,sendOriginalEmail,email};}return {ivnum:'T-TEST',status:'טיוטא',total:100};},
+    async api(url,opts){calls.push(url);if(opts?.body)bodies.push({url,body:JSON.parse(opts.body)});if(url.includes('/close-status'))return closeState || {closed:false,pending:false};if(url.endsWith('/email-original')){if(mailError)throw Error(mailError);return {acceptedByMailServer:true,email};}if(url.includes('/original-download-preflight')){if(preflightError)throw Error(preflightError);return {ok:true};}if(url.includes('/check'))return {value:[]};if(url.endsWith('/close')){if(waitClose)await waitClose;if(closeError)throw new Error(closeError);return {ivnum:'IN-TEST',status:'סופית',originalDownload:downloadMode,digitalEmail:digitalMode,sendOriginalEmail,email};}return {ivnum:'T-TEST',status:'טיוטא',total:100};},
     loadAgentRecent(){},
     async fetch(url){calls.push(url);if(downloadError)throw new Error(downloadError);return {ok:true,headers:{get:()=> 'application/pdf'},blob:async()=>({size:10})};},
     document:{body:{appendChild(){}},createElement(){const a={click(){anchors.push(a);},remove(){}};return a;}},URL:TestURL,location:{href:'http://local/'},setTimeout(fn){timers.push(fn);},showMsg(type,text){messages.push({type,text});},
@@ -55,7 +55,41 @@ test('closing failure retains created draft and retry action, with no document r
   const w=workflow({closeError:'cannot close'});await w.run();
   assert.equal(w.calls.filter(x=>x==='/api/invoices').length,1);assert.equal(w.calls.some(x=>x.includes('/document')),false);
   assert.equal(w.messages.at(-1).type,'warn');assert.match(w.messages.at(-1).text,/T-TEST/);assert.match(w.messages.at(-1).text,/ניסיון סגירה חוזר/);
-  assert.equal(w.fields.details.value,'');assert.equal(w.button.disabled,false);
+  assert.equal(w.fields.details.value,'ORDER-TEST');assert.equal(w.button.disabled,false);
+});
+
+test('lost closing response automatically reconciles and continues preparation for the final number',async()=>{
+  const w=workflow({closeError:'network timeout',closeState:{closed:true,ivnum:'IN123',status:'סופית',originalDownload:true}});
+  await w.run();
+  assert.ok(w.calls.includes('/api/invoices/close-status?ivnum=T-TEST'));
+  assert.ok(w.calls.includes('original-finish:IN123'));
+  assert.equal(w.calls.filter(url=>url==='/api/invoices').length,1);
+  assert.equal(w.calls.filter(url=>url==='/api/invoices/close').length,1);
+  assert.equal(w.messages.at(-1).type,'ok');
+});
+
+test('pending close survives failure and prevents a second invoice creation on submit',async()=>{
+  const w=workflow({closeError:'network timeout'}), state=new Map();
+  w.ctx.sessionStorage={getItem:key=>state.get(key),setItem:(key,value)=>state.set(key,value),removeItem:key=>state.delete(key)};
+  await w.run();assert.equal(state.get('zabanPendingClose'),'T-TEST');
+  assert.equal(w.fields.details.value,'ORDER-TEST');
+  await w.run();
+  assert.equal(w.calls.filter(url=>url==='/api/invoices').length,1);
+  assert.equal(state.get('zabanPendingClose'),'T-TEST');
+});
+
+test('recovered final invoice clears pending close after its original is ready',async()=>{
+  const w=workflow({closeError:'lost response',closeState:{closed:true,ivnum:'IN123',status:'סופית',originalDownload:true}}), state=new Map();
+  w.ctx.sessionStorage={getItem:key=>state.get(key),setItem:(key,value)=>state.set(key,value),removeItem:key=>state.delete(key)};
+  await w.run();assert.equal(state.has('zabanPendingClose'),false);
+});
+
+test('reloading resumes only the saved close and never invokes creation',async()=>{
+  const calls=[];
+  const context={sessionStorage:{getItem:()=> 'T123'},async closeInvoice(...args){calls.push(args);}};
+  await vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/invoice-close-recovery.js'),'utf8'),context);
+  assert.deepEqual(Array.from(calls[0]),['T123',null,false]);
+  assert.equal(calls.length,1);
 });
 test('download failure preserves final-invoice success and leaves download retry enabled',async()=>{
   const w=workflow({downloadError:'network down'});await w.run();

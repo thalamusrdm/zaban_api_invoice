@@ -16,7 +16,7 @@ function progressUI() {
     querySelectorAll(){return stages;}
   }
   const stages=['creating','closing','original','signature'].map(progress=>Object.assign(new Element(),{dataset:{progress}}));
-  const ids=['invoiceProgressDialog','invoiceProgressStatus','form','signatureDialog','signatureName','signaturePdf','signatureCopyLink','signatureTitle','signatureStatus'];
+  const ids=['invoiceProgressDialog','invoiceProgressStatus','form','signatureDialog','signatureName','signatureConsent','signaturePdf','signatureCopyLink','signatureTitle','signatureStatus'];
   const elements=Object.fromEntries(ids.map(id=>[id,new Element()]));
   const ctx={document:{getElementById:id=>elements[id]},clearInvoiceSignature(){},updateSignatureButton(){},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}}};
   const context=vm.createContext(ctx);

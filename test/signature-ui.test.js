@@ -20,7 +20,7 @@ function signatureUI({failSave=false,unverified=false,bounds={width:640,height:1
     fetch:async()=>({ok:true,headers:{get:key=>key==='content-type'?'application/pdf':'test-token'},blob:async()=>({size:10})}),
     api:async(url,opts)=>{calls.push({url,body:JSON.parse(opts.body)});if(failSave)throw Error('test error');return {ivnum:'IN-TEST-DOR',attached:!unverified};}};
   vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/signature.js'),'utf8'),context);
-  return {get,calls,open:()=>context.openInvoiceForSigning('IN-TEST-DOR'),save:()=>get('saveSignature').listeners.click(),draw(){
+  return {get,calls,open:async()=>{await context.openInvoiceForSigning('IN-TEST-DOR');get('signatureConsent').checked=true;},save:()=>get('saveSignature').listeners.click(),draw(){
     const canvas=get('signatureCanvas');canvas.listeners.pointerdown({preventDefault(){},pointerId:1,clientX:10,clientY:10});
     for(const x of [30,50])canvas.listeners.pointermove({preventDefault(){},clientX:x,clientY:20});
     canvas.listeners.pointerup();
@@ -31,7 +31,7 @@ test('signature save is clickable when ready and shows a clear saved state after
   const ui=signatureUI();await ui.open();
   assert.equal(ui.get('saveSignature').disabled,false);
   ui.get('signatureName').value='דור עזריאל';ui.draw();await ui.save();
-  assert.equal(ui.get('saveSignature').textContent,'המסמך נשמר');
+  assert.equal(ui.get('saveSignature').textContent,'אישור החתימה נשמר');
   assert.equal(ui.get('saveSignature').disabled,true);
   assert.equal(ui.get('clearSignature').disabled,true);
   assert.equal(ui.get('signatureName').readOnly,true);
@@ -54,6 +54,12 @@ test('an unverified attachment never shows thanks or leaves the signature step',
   const ui=signatureUI({unverified:true});await ui.open();ui.get('signatureName').value='דור עזריאל';ui.draw();await ui.save();
   assert.equal(ui.calls.some(x=>typeof x==='string'&&x.startsWith('thanks:')),false);
   assert.equal(ui.get('saveSignature').disabled,false);
+});
+
+test('signing requires confirmation that the signature refers to the displayed original',async()=>{
+  const ui=signatureUI();await ui.open();ui.get('signatureName').value='דור';ui.draw();ui.get('signatureConsent').checked=false;
+  await ui.save();assert.equal(ui.calls.some(x=>x.url==='/api/invoices/sign'),false);
+  assert.match(ui.get('signatureStatus').textContent,/יש לאשר/);
 });
 
  test('responsive signature fits phone and tablet proportions without clearing existing strokes on another stroke',async()=>{

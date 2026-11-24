@@ -165,7 +165,7 @@ let completeSignatureFlow;
     resetInvoiceFlow();
     el('invoiceScreen').hidden = true;
     el('typePicker').hidden = false;
-    el('completionDetails').textContent = `ההעתק החתום של חשבונית ${ivnum} נשמר ואומת בנספחים בפריוריטי. אפשר להתחיל חשבונית חדשה.`;
+    el('completionDetails').textContent = `אישור החתימה של חשבונית ${ivnum} נשמר ואומת בנספחים בפריוריטי. המקור נשמר ללא שינוי. אפשר להתחיל חשבונית חדשה.`;
     el('completionNotice').hidden = false;
     if (el('completionOriginal')) {
       el('completionOriginal').dataset.iv = ivnum;
